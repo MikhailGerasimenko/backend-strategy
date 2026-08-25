@@ -75,7 +75,7 @@ app = FastAPI(
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 PUBLIC_PAGES = {"/login", "/register"}
-PUBLIC_API_PREFIX = "/api/auth"
+PUBLIC_API_PREFIXES = ("/api/auth", "/api/v1/health")
 
 
 @app.middleware("http")
@@ -83,7 +83,7 @@ async def auth_guard(request: Request, call_next):
     path = request.url.path
     if path.startswith("/static"):
         return await call_next(request)
-    if path in PUBLIC_PAGES or path.startswith(PUBLIC_API_PREFIX):
+    if path in PUBLIC_PAGES or any(path.startswith(prefix) for prefix in PUBLIC_API_PREFIXES):
         return await call_next(request)
 
     user = get_session_user(request)

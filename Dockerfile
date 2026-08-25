@@ -86,13 +86,16 @@ ENV PYTHONUNBUFFERED=1 \
     TZ=Europe/Moscow
 
 ENV OTEL_METRICS_EXPORTER=none \
-    OTEL_LOGS_EXPORTER=none
+    OTEL_LOGS_EXPORTER=none \
+    OTEL_TRACES_EXPORTER=none \
+    OTEL_SDK_DISABLED=true \
+    WEB_CONCURRENCY=2
 
 USER user
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8000/api/v1/health || exit 1
 
-CMD ["opentelemetry-instrument", "gunicorn", "app.main:app", "-c", "config/gunicorn_conf.py"]
+CMD ["gunicorn", "app.main:app", "-c", "config/gunicorn_conf.py"]

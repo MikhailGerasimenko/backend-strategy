@@ -19,7 +19,8 @@ global:
 
 secrets:
   # -- Use external secrets or not
-  enabled: true
+  # Пока Vault-путь не заведён — иначе pod ждёт несуществующий Secret и деплой таймаутится
+  enabled: false
 
   # -- Kind of external secret backend
   kind: "ClusterSecretStore"
@@ -27,7 +28,7 @@ secrets:
   # -- External secrets backend name
   backend: "eso-vault-backend"
 
-  projectNamespace: "sales-and-supply/templates-sss-v3/python"
+  projectNamespace: "$CI_PROJECT_NAMESPACE"
 
   refreshInterval: 30m
 
@@ -193,14 +194,14 @@ deployment:
       successThreshold: 1
       timeoutSeconds: 5
     readinessProbe:
-      failureThreshold: 2
+      failureThreshold: 6
       httpGet:
         path: /api/v1/health
         port: 8000
         scheme: HTTP
-      initialDelaySeconds: 10
+      initialDelaySeconds: 30
       periodSeconds: 10
-      successThreshold: 2
+      successThreshold: 1
       timeoutSeconds: 5
 
   # -- Deployment security context
