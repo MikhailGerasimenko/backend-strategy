@@ -38,7 +38,8 @@ WORKDIR /app
 COPY pyproject.toml poetry.lock README.md ./
 COPY requirements-navigator.txt ./
 
-RUN poetry install --no-root --no-interaction --without dev && \
+RUN poetry lock --no-interaction && \
+    poetry install --no-root --no-interaction --without dev && \
     pip install --no-cache-dir -r requirements-navigator.txt && \
     pip uninstall -y poetry
 
