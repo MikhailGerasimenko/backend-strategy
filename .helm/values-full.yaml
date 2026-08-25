@@ -1,0 +1,796 @@
+# -- String to partially override fullname
+nameOverride: ""
+
+# -- String to fully override common.names.fullname
+fullnameOverride: ""
+
+env: dev
+
+global:
+  image:
+    repository: docker.repo.severstal.severstalgroup.com/sales-and-supply/templates-sss-v3/python/fastapi-template
+    tag: "1.0.0"
+
+  # -- Container registry credentials
+  imagePullSecrets: "container-registry"
+
+  # -- Image pull policy
+  imagePullPolicy: Always
+
+secrets:
+  # -- Use external secrets or not
+  enabled: true
+
+  # -- Kind of external secret backend
+  kind: "ClusterSecretStore"
+
+  # -- External secrets backend name
+  backend: "eso-vault-backend"
+
+  projectNamespace: "sales-and-supply/templates-sss-v3/python"
+
+  refreshInterval: 30m
+
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+
+  # -- If `false`, disables providing secrets as env to provide only secrets as files
+  env: true
+
+  # -- If `true`, creates a common secret for multiple services usage. Vault path must be projectNamespace/common/env/$env
+  common: ""
+
+    # -- Additional annotations to common secret
+    # annotations: {}
+    #   "helm.sh/hook": pre-install
+    #   "helm.sh/hook-weight": "-10"
+
+  # -- Mount common secret as file into container
+  commonFiles:
+    # - name: krb5.conf
+    #   path: /etc/krb5.conf
+    # - name: configmap.yaml
+    #   path: /etc/configmap.yaml
+
+  # -- Mount secret as file into container
+  files: {}
+    # - name: krb5.conf
+    #   path: /etc/krb5.conf
+    # - name: configmap.yaml
+    #   path: /etc/configmap.yaml
+
+  # -- Platform-common secrets (OTEL/Jaeger)
+  platformCommon:
+    enabled: false
+    path: ""
+    refreshInterval: "5m"
+
+  # -- Provide ssl certificate with key via ESO
+  tls:
+    # -- External secrets backend name for TLS
+    backend: "eso-vault-backend"
+
+deployment:
+
+  # image:
+
+  #   # -- Deployment container registry image path. Overwrites global.image.repository parameter
+  #   repository: docker.repo.severstal.severstalgroup.com/nginx
+
+  #   # -- Deployment container registry image tag. Overwrites global.image.tag parameter
+  #   tag: 1.21
+
+  # -- Deployment image pull policy. Overwrites global.imagepullpolicy
+  imagePullPolicy: IfNotPresent
+
+  # -- Number of replicas for deployment
+  replicas: 1
+
+  # -- Fixed Environment variable
+  env: []
+  # - name: DOTNET_CLI_TELEMETRY_OPTOUT
+  #   value: "1"
+  # - name: DOTNET_USE_POLLING_FILE_WATCHER
+  #   value: "1"
+
+  # -- Additional annotations for deployment
+  annotations: {}
+    # additional-annotation: value-of-additional-annotation
+
+  reloadOnChange:
+    # -- Reloads container if configMap or secret changed
+    enabled: true
+
+    # -- Reloads the deployment if the specified configmap or secret in the namespace is changed, even if they are not used by the deployment itself
+    # configMapOnChange: configmap-1
+    # secretOnChange: secret-1
+
+  # -- Additional deployment labels
+  additionalLabels: {}
+    # additional-label: value-of-my-additional-label
+
+  # -- Additional deployment pod labels
+  podLabels: {}
+  #   additional-pod-label: value-of-additional-pod-label
+
+  strategy:
+
+    # -- Deployment strategy type
+    type: RollingUpdate
+    # or
+    # type: Recreate
+
+    # -- If strategy.type is `RollingUpdate`
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+
+  # -- Command to run in main container
+  command: "" #['sh', '-c', 'binary_package']
+
+  ports:
+  - containerPort: 8000
+    name: http
+    protocol: TCP
+
+  # -- Deployment host aliases
+  hostAliases: []
+  # - ip: "10.10.10.10"
+  #   hostnames:
+  #   - "foo.local"
+  #   - "bar.local"
+  # - ip: "10.10.10.11"
+  #   hostnames:
+  #   - "google.ru"
+  #   - "yandex.ru"
+
+  # -- Deployment init containers
+  initContainers: {}
+  #   init-container:
+  #     image: docker.repo.severstal.severstalgroup.com/devops-public/corp-images/ubuntu:22.04
+  #     command: ['sh', '-c', 'whoami']
+  #     resources: {}
+  #     volumeMounts:
+  #     - name: additional-configmap-file-1
+  #       mountPath: /tmp/index.html
+  #       subPath: index.html
+  #     env:
+  #     - name: ENV_VAR_NAME
+  #       value: "value"
+  #     securityContext:
+  #       runAsUser: 1000
+
+  resources:
+    limits:
+      memory: 512Mi
+      cpu: 1
+    requests:
+      memory: 128Mi
+      cpu: 0.1
+
+  probes:
+    livenessProbe:
+      failureThreshold: 4
+      httpGet:
+        path: /api/v1/health
+        port: 8000
+        scheme: HTTP
+      initialDelaySeconds: 20
+      periodSeconds: 15
+      successThreshold: 1
+      timeoutSeconds: 5
+    readinessProbe:
+      failureThreshold: 2
+      httpGet:
+        path: /api/v1/health
+        port: 8000
+        scheme: HTTP
+      initialDelaySeconds: 10
+      periodSeconds: 10
+      successThreshold: 2
+      timeoutSeconds: 5
+
+  # -- Deployment security context
+  securityContext: {}
+  #   runAsUser: 10000
+  #   runAsGroup: 10000
+  #   fsGroup: 10000
+
+  # -- Container securityu context
+  containerSecurityContext: {}
+  #   runAsUser: 10000
+  #   runAsGroup: 10000
+
+  tolerations:
+    - key: client-cluster
+      operator: Equal
+      value: sales-supply
+      effect: "NoSchedule"
+
+  # -- Deployment node selector
+  nodeSelector: {}
+  #   kubernetes.io/hostname: k8s-test-int11
+
+  # -- Deployment affinity
+  affinity: {}
+  #   nodeAffinity:
+  #     requiredDuringSchedulingIgnoredDuringExecution:
+  #       nodeSelectorTerms:
+  #       - matchExpressions:
+  #         - key: kubernetes.io/hostname
+  #           operator: In
+  #           values:
+  #           - k8s-test-int12
+
+  # -- Deployment additional env. Mount env of any configMap or secret wich were created manually
+  additionalEnvFrom: {}
+  #   configMap:
+  #     - additional-configmap-1
+  #     - additional-configmap-2
+  #   secret:
+  #     - additional-secret-1
+  #     - additional-secret-2
+
+  # -- Deployment additional mounts. Mount configMap or secret wich were created manually as file into container
+  additionalMounts: {}
+  #   configMap:
+  #     - name: additional-configmap-file-1
+  #       mountPath: /tmp/index.html
+  #     - name: additional-configmap-file-2
+  #       mountPath: /tmp/data/configmap.yaml
+  #   secret:
+  #     - name: additional-secret-file-1
+  #       mountPath: /mnt/data/config.yaml
+
+  # -- Deployment additional PVC. Mount PVC wich was created manually into container
+  additionalPVC: []
+  #   - name: additional-pvc
+  #     mountPath: /mnt/mydata
+
+  # -- Default duration in seconds Kubernetes waits for container to exit before sending kill signal
+  terminationGracePeriodSeconds: 60
+
+service:
+
+  # -- Service type
+  type: ClusterIP
+
+  # -- Additional annotation
+  annotations: {}
+    # my-service-annotation: my-service-annotation-value
+
+  # -- Additional service labels
+  additionalLabels: {}
+  #   additional-label: value-additional-label
+
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+    protocol: TCP
+
+ingress:
+  - className: nginx
+    annotations: {}
+    hosts:
+      - host: fastapi-template-dev.kube.severstal.severstalgroup.com
+        paths:
+          - path: /
+            port: 8000
+            pathType: Prefix
+        tls:
+          common: true
+
+# -- Create PVC
+pvc: {}
+# - name: storage
+#   annotations:
+#     "helm.sh/hook": pre-install
+#   size: 5Gi
+#   mountPath: /storage
+#   storageClassName: ceph-rbd-sc
+#   accessModes: ReadWriteOnce
+
+podMonitor:
+
+  # -- Create pod monitor
+  enabled: false
+
+  # -- Pod monitor custom monitor labels
+  monitorLabels: {}
+  #   my-label: my-value
+
+  # -- Pod moniutor namespace selector
+  namespaceSelector: []
+  #   - name-of-namespace
+
+  # -- Pod monitor custom match labels
+  matchLabels: {}
+  #   custom-label: custom-value
+
+  # -- Pod monitor metrics path
+  path: /metrics
+
+  # -- Pod monitor target port
+  # @default -- Default value is service.ports[0].name
+  port: http
+
+serviceMonitor:
+
+  # -- Create service monitor
+  enabled: false
+
+  # -- Service monitor custom monitor labels
+  monitorLabels: {}
+  #   monitor-label: value-of-monitor-label
+
+  # -- Service monitor namespace selector
+  namespaceSelector: []
+  #   - name-of-namespace
+
+  # -- Service monitor Custom match labels
+  matchLabels: {}
+  #   custom-label: custom-value
+
+  # -- Service monitor metrics path
+  path: /metrics
+
+  # @default -- Default value is service.ports[0].name
+  port: http
+
+prometheusRule:
+
+  # -- Create prometheus rule
+  enabled: false
+
+  # -- Prometheus rule additional labels
+  additionalLabels: {}
+    # prometheus: stakater-workload-monitoring
+    # role: alert-rules
+
+  # -- Prometheus rule rules
+  groups: []
+    # - name: example-app-uptime
+    #   rules:
+    #     - alert: ExampleAppDown
+    #       annotations:
+    #         message: >-
+    #           The Example App is Down (Test Alert)
+    #       expr: up{namespace="test-app"} == 0
+    #       for: 1m
+    #       labels:
+    #         severity: critical
+
+job:
+
+  # -- Enable Job
+  enabled: false
+
+  # -- Job additional labels
+  additionalLabels: {}
+    # key1: value1
+
+  # -- Job annotations
+  annotations: {}
+    # key112: value112
+
+  # -- (int) Job parallelism
+  parallelism: ""
+
+  # -- (int) Job completions
+  completions: ""
+
+  # -- (int) Job backoffLimit
+  backoffLimit: ""
+
+  # -- (int) Job activeDeadlineSeconds
+  activeDeadlineSeconds: ""
+
+  # -- (int) Job parallelism ttlSecondsAfterFinished. Works on Kubernetes >= v1.23
+  ttlSecondsAfterFinished: ""
+
+  # -- Job restart policy
+  restartPolicy: Never
+
+  # image:
+
+  #   # -- Job container registry image path. Overwrites global.image.repository parameter
+  #   repository: docker.repo.severstal.severstalgroup.com/nginx
+
+  #   # -- Job container registry image tag. Overwrites global.image.tag parameter
+  #   tag: 1.21
+
+  # -- Job image pull policy. Overwrites global.imagepullpolicy
+  imagePullPolicy: IfNotPresent
+
+  # -- Job command to run
+  command: ['sh', '-c', 'whoami']
+
+  # -- Fixed Environment variable
+  env: []
+  # - name: DOTNET_CLI_TELEMETRY_OPTOUT
+  #   value: "1"
+  # - name: DOTNET_USE_POLLING_FILE_WATCHER
+  #   value: "1"
+
+  # -- Job resources
+  resources: {}
+    # limits:
+    #   memory: 256Mi
+    #   cpu: 0.5
+    # requests:
+    #   memory: 128Mi
+    #   cpu: 0.1
+
+  # -- Job security context
+  securityContext: {}
+    # runAsUser: 10000
+    # runAsGroup: 10000
+
+  # -- Job container security context
+  containerSecurityContext: {}
+    # runAsUser: 10000
+    # runAsGroup: 10000
+
+  # -- Job tolerations
+  tolerations: []
+  # - key: "client-cluster"
+  #   operator: "Equal"
+  #   value: "sales-supply"
+  #   effect: "NoSchedule"
+
+  # -- Job node selector
+  nodeSelector: {}
+    # kubernetes.io/hostname: k8s-test-int11
+
+  # -- Job affinity
+  affinity: {}
+    # nodeAffinity:
+    #   requiredDuringSchedulingIgnoredDuringExecution:
+    #     nodeSelectorTerms:
+    #     - matchExpressions:
+    #       - key: kubernetes.io/hostname
+    #         operator: In
+    #         values:
+    #         - k8s-test-int11
+
+  # -- Job additional env. Mount env of any configMap or secret wich were created manually
+  additionalEnvFrom: {}
+    # configMap:
+    #   - additional-configmap-1
+    #   - additional-configmap-2
+    # secret:
+    #   - additional-secret-1
+
+  # -- Job additional mounts. Mount configMap or secret wich were created manually as file into container
+  additionalPVC: []
+    # - name: additional-pvc-1
+    #   mountPath: /tmp/data
+
+  # -- Job additional PVC. Mount PVC wich was created manually into container
+  additionalMounts: {}
+    # configMap:
+    #   - name: additional-configmap-asdasdasda1
+    #     mountPath: /tmp/additional-configmap-1
+    # secret:
+    #   - name: additional-secret-1
+    #     mountPath: /tmp/additional-configmap-1
+
+cronjob:
+
+  # -- Enable CronJob
+  enabled: false
+
+  # -- CronJob additional labels
+  additionalLabels: {}
+    # key1: value1
+
+  # -- CronJob annotations
+  annotations: {}
+    # key112: value112
+
+  # -- CronJob schedule
+  schedule: "* * * * *"
+
+  # -- (int) CronJob startingDeadlineSeconds
+  startingDeadlineSeconds: ""
+
+  # -- (int) CronJob successfulJobsHistoryLimit
+  successfulJobsHistoryLimit: ""
+
+  # -- (int) CronJob failedJobsHistoryLimit
+  failedJobsHistoryLimit: ""
+
+  # -- CronJob suspend
+  suspend: false
+
+  # -- (int) CronJob parallelism
+  parallelism: ""
+
+  # -- (int) CronJob completions
+  completions: ""
+
+  # -- (int) CronJob backoffLimit
+  backoffLimit: ""
+
+  # -- (int) CronJob activeDeadlineSeconds
+  activeDeadlineSeconds: ""
+
+  # -- (int) CronJob parallelism ttlSecondsAfterFinished. Working on Kubernetes >= v1.23
+  ttlSecondsAfterFinished: ""
+
+  # -- CronJob restart policy
+  restartPolicy: Never
+
+  # image:
+
+  #   # -- CronJob container registry image path. Overwrites global.image.repository parameter
+  #   repository: docker.repo.severstal.severstalgroup.com/nginx
+
+  #   # -- CronJob container registry image tag. Overwrites global.image.tag parameter
+  #   tag: 1.21
+
+  # -- CronJob image pull policy. Overwrites global.imagepullpolicy
+  imagePullPolicy: IfNotPresent
+
+  # -- CronJob command to run
+  command: ['sh', '-c', 'whoami']
+
+  # -- Fixed Environment variable
+  env: []
+  # - name: DOTNET_CLI_TELEMETRY_OPTOUT
+  #   value: "1"
+  # - name: DOTNET_USE_POLLING_FILE_WATCHER
+  #   value: "1"
+
+  # -- CronJob resources
+  resources: {}
+    # limits:
+    #   memory: 256Mi
+    #   cpu: 0.5
+    # requests:
+    #   memory: 128Mi
+    #   cpu: 0.1
+
+  # -- CronJob security context
+  securityContext: {}
+    # runAsUser: 10000
+    # runAsGroup: 10000
+
+  # -- CronJob container security context
+  containerSecurityContext: {}
+    # runAsUser: 10000
+    # runAsGroup: 10000
+
+  # -- CronJob tolerations
+  tolerations: []
+  # - key: "client-cluster"
+  #   operator: "Equal"
+  #   value: "sales-supply"
+  #   effect: "NoSchedule"
+
+  # -- CronJob node selector
+  nodeSelector: {}
+    # kubernetes.io/hostname: k8s-test-int11
+
+  # -- CronJob affinity
+  affinity: {}
+    # nodeAffinity:
+    #   requiredDuringSchedulingIgnoredDuringExecution:
+    #     nodeSelectorTerms:
+    #     - matchExpressions:
+    #       - key: kubernetes.io/hostname
+    #         operator: In
+    #         values:
+    #         - k8s-test-int11
+
+  # -- CronJob additional env. Mount env of any configMap or secret wich were created manually
+  additionalEnvFrom: {}
+    # configMap:
+    #   - additional-configmap-1
+    #   - additional-configmap-2
+    # secret:
+    #   - additional-secret-1
+
+  # -- CronJob additional mounts. Mount configMap or secret wich were created manually as file into container
+  additionalPVC: []
+    # - name: additional-pvc-1
+    #   mountPath: /tmp/data
+
+  # -- CronJob additional PVC. Mount PVC wich was created manually into container
+  additionalMounts: {}
+    # configMap:
+    #   - name: additional-configmap-asdasdasda1
+    #     mountPath: /tmp/additional-configmap-1
+    # secret:
+    #   - name: additional-secret-1
+    #     mountPath: /tmp/additional-configmap-1
+
+rbac:
+
+  # -- Enable role-based access control. If true, role & rolebinding will be created
+  enabled: false
+  serviceAccount:
+
+    # -- Create service account. If true, role will be binded to this SA. If false, role will be binded to default SA
+    create: false
+
+    ## -- Name of SA
+    name: serviceaccount
+
+    ## - SA additional labels
+    additionalLabels: {}
+      # key: value
+
+    ## - SA annotations
+    annotations: {}
+      # key: value
+
+  ## -- Create role with rules
+  role: {}
+    # rules:
+    # - apiGroups:
+    #   - ""
+    #   resources:
+    #   - configmaps
+    #   verbs:
+    #   - get
+
+pdb:
+
+  # -- Enable pod disruption budget. Works on Kubernetes >= v1.23
+  enabled: false
+
+  # -- Pod disruption budget configuration
+  minAvailable: 1
+  # or
+  # maxUnavailable: 1
+
+autoscaling:
+
+  # -- Enable autoscaling
+  enabled: false
+
+  # -- Autooscaling additional labels
+  additionalLabels: {}
+  # key: value
+
+  # -- Autoscaling annotations
+  annotations: {}
+  # key: value
+
+  # -- Min replicas sets the minimum number of replicas
+  minReplicas: 1
+
+  # -- Max replicas sets the maximum number of replicas to scale
+  maxReplicas: 10
+
+  # -- Metrics is the list of metrics used for hpa
+  metrics: []
+    # - type: Resource
+    #   resource:
+    #     name: cpu
+    #     target:
+    #       type: Utilization
+    #       averageUtilization: 60
+    # - type: Resource
+    #   resource:
+    #     name: memory
+    #     target:
+    #       type: Utilization
+    #       averageUtilization: 60
+
+networkPolicy:
+
+  # -- Enable network policy
+  enabled: false
+
+  # -- Network policy additional labels
+  additionalLabels:
+  #   key: value
+
+  # -- Network policy annotations
+  annotations:
+  #   key: value
+
+  # -- Network policy ingress rules
+  ingress: []
+  # - from:
+  #   - ipBlock:
+  #       cidr: 172.17.0.0/16
+  #       except:
+  #       - 172.17.1.0/24
+  #   - namespaceSelector:
+  #       matchLabels:
+  #         project: myproject
+  #   - podSelector:
+  #       matchLabels:
+  #         role: frontend
+  #   ports:
+  #   - protocol: TCP
+  #     port: 6379
+
+  # -- Network policy egress rules
+  egress: []
+    # - to:
+    #   - ipBlock:
+    #       cidr: 10.0.0.0/24
+    #   ports:
+    #   - protocol: TCP
+    #     port: 5978
+
+autoscaling:
+  enabled: false
+
+  hpa:
+    enabled: false
+    # additionalLabels: {}
+    # annotations: {}
+
+    # targetRef (по умолчанию берётся fullname/apps/v1/Deployment)
+    # targetRef:
+    #   apiVersion: apps/v1
+    #   kind: Deployment
+    #   name: ""
+
+    # minReplicas: 2
+    maxReplicas: 3  # важно: в шаблоне стоит required; оставьте дефолт, чтобы не падать при включении
+
+    # metrics:
+    #   - type: Resource
+    #     resource:
+    #       name: cpu
+    #       target:
+    #         type: Utilization
+    #         averageUtilization: 70
+    #
+    #   - type: Resource
+    #     resource:
+    #       name: memory
+    #       target:
+    #         type: AverageValue
+    #         averageValue: 500Mi
+
+    # behavior (только для autoscaling/v2; закомментировано по умолчанию)
+    # behavior:
+    #   scaleUp:
+    #     stabilizationWindowSeconds: 0
+    #     policies:
+    #       - type: Percent
+    #         value: 100
+    #         periodSeconds: 60
+    #   scaleDown:
+    #     stabilizationWindowSeconds: 300
+    #     policies:
+    #       - type: Percent
+    #         value: 100
+    #         periodSeconds: 60
+
+  vpa:
+    enabled: false
+    # skipCRDCheck: false  # поставьте true, если CRD ставятся отдельно и не хотите фейл при отсутствии
+
+    # name: ""             # по умолчанию fullname
+    # targetRef:
+    #   apiVersion: apps/v1
+    #   kind: Deployment
+    #   name: ""
+
+    updatePolicy:
+      updateMode: Off     # Off = «сканер» (только рекомендации), Initial/Auto применяют
+
+    # resourcePolicy:      # рекомендуем задать при включении
+    #   containerPolicies:
+    #     - containerName: "*"
+    #       controlledResources: ["cpu","memory"]
+    #       # controlledValues: RequestsOnly    # или RequestsAndLimits
+    #       minAllowed:
+    #         cpu: "100m"
+    #         memory: "128Mi"
+    #       maxAllowed:
+    #         cpu: "2"
+    #         memory: "2Gi"
+
+    # recommenders:
+    #   - name: "custom-recommender"

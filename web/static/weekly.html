@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Бриф за период — Стратегический навигатор</title>
+  <link rel="stylesheet" href="/static/style.css?v=20260813a" />
+</head>
+<body class="app-shell" data-page="brief">
+  <aside class="app-sidebar" aria-label="Навигация">
+    <div class="sidebar-brand">
+      <img src="/static/images/severstal-logo.png" alt="Северсталь" class="sidebar-logo" />
+    </div>
+    <nav class="sidebar-nav">
+      <p class="sidebar-group-label">Данные</p>
+      <a class="sidebar-link" href="#attachmentPanel" data-nav="attachmentPanel">Дополнительные документы в RAG</a>
+      <a class="sidebar-link" href="#attachmentLibrary" data-nav="attachmentLibrary">Библиотека документов</a>
+      <a class="sidebar-link" href="/sources">Свои источники</a>
+
+      <p class="sidebar-group-label">Бриф</p>
+      <a class="sidebar-link" href="#sourcesPanel" data-nav="sourcesPanel">Источники</a>
+      <a class="sidebar-link" href="#promptPanel" data-nav="promptPanel">Системный промпт</a>
+      <a class="sidebar-link active" href="#periodPanel" data-nav="periodPanel">Бриф за период</a>
+
+      <p class="sidebar-group-label">Разделы</p>
+      <a class="sidebar-link" href="/agent" data-nav="agent">Агент</a>
+    </nav>
+    <div class="sidebar-footer">
+      <span class="sidebar-user" id="userName">—</span>
+      <button type="button" class="btn-logout sidebar-logout" id="btnLogout">Выйти</button>
+    </div>
+  </aside>
+
+  <div class="app-content">
+    <header class="page-header">
+      <h1>Бриф за период</h1>
+      <p class="subtitle">Генерация брифа из RAG-базы (сырые новости + PDF-отчёты)</p>
+    </header>
+
+    <main class="container">
+      <section class="card status-bar" id="configStatus">
+        <span class="badge" id="apiBadge">Проверка…</span>
+        <span class="hint" id="modelHint"></span>
+        <span class="hint" id="pgHint"></span>
+      </section>
+
+      <section class="card" id="attachmentPanel">
+        <h2>Дополнительные документы в RAG</h2>
+        <p class="help">
+          Прикрепите PDF, Word или TXT — можно выбрать несколько файлов сразу.
+          Тип определяется по имени: PMI, Kallanish (в т.ч. massmail `.txt`), иначе PDF отчёт / Kallanish.
+        </p>
+        <div class="row attachment-form">
+          <label for="pdfDate">Дата (начало)</label>
+          <input type="date" id="pdfDate" />
+          <label for="pdfEnd">Конец периода</label>
+          <input type="date" id="pdfEnd" />
+        </div>
+        <div class="row attachment-form">
+          <label for="attachmentFile">Файлы</label>
+          <input
+            type="file"
+            id="attachmentFile"
+            multiple
+            accept=".pdf,.docx,.txt,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+          />
+          <button type="button" class="btn secondary" id="btnUploadAttachment">
+            Загрузить в RAG
+          </button>
+        </div>
+        <p class="hint" id="documentTypeHint">Тип подставится сам: PMI / PDF отчёт / Kallanish (в т.ч. из .txt).</p>
+        <p class="upload-file-count hint" id="attachmentFileCount"></p>
+        <p class="upload-hint" id="attachmentUploadHint"></p>
+      </section>
+
+      <section class="card collapsible-card" id="attachmentLibrary">
+        <button
+          type="button"
+          class="collapsible-header"
+          id="btnToggleAttachmentLibrary"
+          aria-expanded="true"
+          aria-controls="attachmentLibraryBody"
+        >
+          <span class="collapsible-chevron" aria-hidden="true">▾</span>
+          <span class="collapsible-title">Библиотека документов</span>
+          <span class="collapsible-count" id="attachmentLibraryCount"></span>
+        </button>
+        <div class="collapsible-body" id="attachmentLibraryBody">
+          <p class="help">
+            PDF, Kallanish и PMI в RAG. Все файлы за период брифа («С» / «По»)
+            участвуют в генерации, если их тип включён в источниках
+            (Kallanish / PDF отчёт / PMI). Включение и отключение — только там.
+          </p>
+          <div class="attachment-library-toolbar">
+            <label class="attachment-filter-toggle">
+              <input type="checkbox" id="attachmentFilterByPeriod" />
+              Только за период загрузки выше
+            </label>
+            <button type="button" class="btn secondary btn-sm" id="btnRefreshAttachments">
+              Обновить список
+            </button>
+            <span class="source-selection-hint" id="attachmentSelectionHint">—</span>
+          </div>
+          <div class="attachment-table-wrap data-table-wrap" id="attachmentTableWrap">
+            <p class="hint" id="attachmentListStatus">Загрузка…</p>
+            <table class="attachment-table data-table" id="attachmentTable" hidden>
+              <thead>
+                <tr>
+                  <th>Тип</th>
+                  <th>Название</th>
+                  <th>Период</th>
+                  <th>Чанков</th>
+                  <th>Загрузил</th>
+                  <th>Дата</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="attachmentTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="card period-card" id="periodPanel">
+        <h2>1. Период</h2>
+        <p class="help">Диапазон дат для брифа. Перед генерацией проверьте, что новости за период проиндексированы в RAG.</p>
+        <div class="period-range">
+          <div class="period-field">
+            <label for="periodStart">С</label>
+            <input type="date" id="periodStart" class="period-input" />
+          </div>
+          <span class="period-separator" aria-hidden="true">→</span>
+          <div class="period-field">
+            <label for="periodEnd">По</label>
+            <input type="date" id="periodEnd" class="period-input" />
+          </div>
+          <button type="button" class="btn secondary period-check-btn" id="btnCheckCoverage">
+            Проверить индекс
+          </button>
+        </div>
+        <div class="coverage-banner" id="coverageBanner" hidden>
+          <span class="coverage-icon" id="coverageIcon" aria-hidden="true">ℹ</span>
+          <p class="coverage-text" id="coverageInfo"></p>
+        </div>
+      </section>
+
+      <section class="card" id="sourcesPanel">
+        <h2>2. Источники</h2>
+        <p class="help">
+          Источники сгруппированы по <strong>категориям</strong> из Excel
+          (лист health, колонка «Категория»): Металлургия РФ / мира, Китай,
+          Макроэкономика РФ / мира. На чипе — тип брифа (новостной / рыночный / все типы).
+          Справа от названия категории — кнопка <strong>Все</strong> / <strong>Снять</strong>
+          для выбора всей группы. В группе «Документы RAG»: <strong>Kallanish</strong>,
+          <strong>PDF отчёт</strong>, <strong>PMI</strong>. При выборе шаблона брифа
+          отмечаются подходящие источники. Цифра — сколько новостей или документов
+          за период есть в RAG. Свои Telegram-каналы — в разделе
+          <a href="/sources">Свои источники</a>.
+        </p>
+        <div class="source-toolbar">
+          <button type="button" class="btn secondary btn-sm" id="btnSelectBriefSources">По типу брифа</button>
+          <button type="button" class="btn secondary btn-sm" id="btnSelectAllSources">Все</button>
+          <button type="button" class="btn secondary btn-sm" id="btnClearSources">Снять все</button>
+          <span class="source-selection-hint" id="sourceSelectionHint">—</span>
+        </div>
+        <div id="sourceBriefGroups"></div>
+      </section>
+
+      <section class="card" id="promptPanel">
+        <h2>3. Системный промпт</h2>
+        <p class="help">Шаблоны брифа. Смена типа меняет только промпт и набор источников — период (С/По) не трогается.</p>
+        <div class="row actions-top prompt-variant-row">
+          <button type="button" class="btn secondary" id="btnLoadFull">Полный бриф</button>
+          <button type="button" class="btn secondary" id="btnLoadMarket">Рыночный бриф</button>
+          <button type="button" class="btn secondary" id="btnLoadCorporate">Новостной бриф</button>
+          <button type="button" class="btn secondary" id="btnLoadMonthlyNews">Ежемесячный новостной бриф</button>
+          <button type="button" class="btn secondary" id="btnLoadMonthlyMarket">Ежемесячный рыночный бриф</button>
+        </div>
+        <p class="help prompt-kind-hint" id="promptKindHint">Тип брифа: полный</p>
+        <textarea id="systemPrompt" rows="16" placeholder="Системный промпт…"></textarea>
+      </section>
+
+      <section class="card" id="modelPanel">
+        <h2>4. Модель</h2>
+        <div class="row">
+          <label>Модель OpenRouter</label>
+          <p class="model-readonly" id="modelDisplay">—</p>
+        </div>
+      </section>
+
+      <section class="card actions" id="generatePanel">
+        <h2>5. Генерация</h2>
+        <div class="generate-actions">
+          <button type="button" class="btn primary" id="btnWeeklyBrief">Сгенерировать бриф</button>
+          <button type="button" class="btn danger" id="btnStopWeeklyBrief" hidden disabled>
+            Остановить
+          </button>
+        </div>
+      </section>
+
+      <section class="card" id="progressCard" hidden>
+        <h2>Ход выполнения</h2>
+        <div class="progress-wrap"><div class="progress-bar" id="progressBar"></div></div>
+        <p class="job-status" id="jobStatus">—</p>
+        <pre class="log" id="jobLog"></pre>
+      </section>
+
+      <section class="card" id="briefEditorCard" hidden>
+        <h2>6. Редактирование брифа</h2>
+        <p class="help" id="briefEditorHelp">
+          Проверьте и поправьте текст. Затем нажмите «Скачать Word» — файл соберётся уже с вашими правками.
+        </p>
+        <textarea id="briefEditor" rows="22" placeholder="Текст брифа появится после генерации…"></textarea>
+        <div class="brief-editor-actions">
+          <button type="button" class="btn primary" id="btnExportDocx">Скачать Word</button>
+          <button type="button" class="btn secondary" id="btnExportJson" hidden>Скачать JSON</button>
+          <span class="hint" id="briefExportHint"></span>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/static/weekly.js?v=20260814b"></script>
+</body>
+</html>

@@ -1,0 +1,55 @@
+fullnameOverride: "$CI_PROJECT_NAME_SLUG"
+
+global:
+  image:
+    repository: docker.repo.severstal.severstalgroup.com/$CI_PROJECT_PATH
+    tag: 1.13
+
+secrets:
+  enabled: true
+  projectNamespace: "$CI_PROJECT_NAMESPACE"
+  backend: "eso-vault-backend"
+
+deployment:
+  replicas: 1
+  reloadOnChange:
+    enabled: true
+  env:
+    - name: HTTP_PROXY
+      value: "http://ar-proxy.severstal.severstalgroup.com:3128"
+    - name: HTTPS_PROXY
+      value: "http://ar-proxy.severstal.severstalgroup.com:3128"
+    - name: PARSING_PROXY
+      value: "http://ar-proxy.severstal.severstalgroup.com:3128"
+    - name: NO_PROXY
+      value: "localhost,127.0.0.1,.severstal.severstalgroup.com,.severstalgroup.com"
+    - name: TZ
+      value: "Europe/Moscow"
+    - name: QDRANT_URL
+      value: "http://qdrant:6333"
+  resources:
+    limits:
+      memory: 2Gi
+      cpu: 2
+    requests:
+      memory: 512Mi
+      cpu: 0.25
+
+service:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+    protocol: TCP
+
+ingress:
+  -
+    className: nginx
+    hosts:
+    - host: generic-app.severstal.com
+      paths:
+        - path: /
+          port: 8000
+      tls:
+        common: true

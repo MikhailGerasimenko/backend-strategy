@@ -1,0 +1,34 @@
+{{- if (and .Values.serviceMonitor (eq .Values.serviceMonitor.enabled true)) }}
+{{- $fullName := include "fullname" . -}}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ $fullName }}-service-monitor
+  labels:
+  {{- if .Values.serviceMonitor.monitorLabels }}
+  {{- toYaml .Values.serviceMonitor.monitorLabels | nindent 4 }}
+  {{- else }}
+    release: prometheus
+  {{- end }}
+spec:
+  namespaceSelector:
+  {{- if .Values.serviceMonitor.namespaceSelector }}
+    matchNames:
+  {{- toYaml .Values.serviceMonitor.namespaceSelector | nindent 6 }}
+  {{- else }}
+    matchNames:
+      - {{ .Release.Namespace }}
+  {{- end }}
+  endpoints:
+  - interval: {{ .Values.serviceMonitor.interval | default "30s" }}
+    port: {{ (index .Values.serviceMonitor "port") | default (index (index .Values.service "ports") 0 "name") }}
+    path: {{ .Values.serviceMonitor.path }}
+  selector:
+    matchLabels:
+    {{- if .Values.serviceMonitor.matchLabels }}
+    {{- toYaml .Values.serviceMonitor.matchLabels | nindent 6 }}
+    {{- else }}
+    {{- include "selectorLabels" . | nindent 6 }}
+    {{- end }}
+{{- end }}

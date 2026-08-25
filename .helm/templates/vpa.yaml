@@ -1,0 +1,41 @@
+{{- if and .Values.autoscaling .Values.autoscaling.vpa .Values.autoscaling.vpa.enabled }}
+  {{- $vpa := .Values.autoscaling.vpa -}}
+  {{- $fullName := include "fullname" . -}}
+  {{- $tr := (default (dict) $vpa.targetRef) -}}
+  {{- $up := (default (dict) $vpa.updatePolicy) -}}
+
+  {{- if not (or $vpa.skipCRDCheck (.Capabilities.APIVersions.Has "autoscaling.k8s.io/v1/VerticalPodAutoscaler")) }}
+  {{- fail "VPA CRDs (autoscaling.k8s.io/v1) not found. Install VPA before enabling autoscaling.vpa." }}
+  {{- end }}
+
+---
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: {{ default $fullName $vpa.name }}
+  labels:
+    {{- include "labels" . | nindent 4 }}
+  {{- with $vpa.additionalLabels }}
+  {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with $vpa.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  targetRef:
+    apiVersion: {{ default "apps/v1" (get $tr "apiVersion") }}
+    kind:       {{ default "Deployment" (get $tr "kind") }}
+    name:       {{ default $fullName     (get $tr "name") }}
+  updatePolicy:
+    # Auto | Initial | Off
+    updateMode: {{ default "Off" (get $up "updateMode") }}
+  {{- with $vpa.resourcePolicy }}
+  resourcePolicy:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with $vpa.recommenders }}
+  recommenders:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- end }}

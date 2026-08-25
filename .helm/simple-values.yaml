@@ -1,0 +1,31 @@
+global:
+  image:
+    repository: docker.repo.severstal.severstalgroup.com/sales-and-supply/templates-sss-v3/python/fastapi-template
+    tag: 1.13
+
+secrets:
+  enabled: true
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+  projectNamespace: "sales-and-supply/templates-sss-v3/python"
+  backend: "eso-vault-backend"
+  files: {}
+
+deployment:
+  replicas: 1
+  reloadOnChange:
+    enabled: true
+  tolerations:
+  - key: "client-cluster"
+    operator: "Equal"
+    value: "sales-supply"
+    effect: "NoSchedule"
+
+service:
+  type: ClusterIP
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+    protocol: TCP

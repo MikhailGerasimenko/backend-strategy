@@ -1,0 +1,432 @@
+{
+  "comment": "Категория источника по типу брифа (лист health в metallurgy_news Excel: колонки Бриф / Категория). news=новостной, market=рыночный, all=все типы, null=не использовать / удалить. topic_category — колонка «Категория».",
+  "labels": {
+    "news": "Новостной",
+    "market": "Рыночный",
+    "all": "Все типы"
+  },
+  "brief_kind_match": {
+    "full": [
+      "news",
+      "market",
+      "all"
+    ],
+    "monthly": [
+      "news",
+      "market",
+      "all"
+    ],
+    "monthly_news": [
+      "news",
+      "all"
+    ],
+    "monthly_market": [
+      "market",
+      "all"
+    ],
+    "monthly_corporate": [
+      "market",
+      "all"
+    ],
+    "market": [
+      "market",
+      "all"
+    ],
+    "corporate": [
+      "news",
+      "all"
+    ]
+  },
+  "sources": {
+    "MetalInfo Domestic": {
+      "brief": "news",
+      "topic_category": "Металлургия РФ",
+      "note": null
+    },
+    "MetalInfo Abroad": {
+      "brief": "news",
+      "topic_category": "Металлургия мира",
+      "note": null
+    },
+    "Eurometal": {
+      "brief": "all",
+      "topic_category": "Металлургия мира",
+      "note": null
+    },
+    "Mysteel": {
+      "brief": "all",
+      "topic_category": "Китай",
+      "note": null
+    },
+    "Yieh Corp": {
+      "brief": "all",
+      "topic_category": "Китай",
+      "note": null
+    },
+    "GMK.Center": {
+      "brief": "all",
+      "topic_category": "Металлургия мира",
+      "note": null
+    },
+    "Reuters Economy": {
+      "brief": "market",
+      "topic_category": "Макроэкономика мира",
+      "note": null
+    },
+    "Bloomberg Economics": {
+      "brief": "market",
+      "topic_category": "Макроэкономика мира",
+      "note": null
+    },
+    "RBC Economics": {
+      "brief": "market",
+      "topic_category": "Макроэкономика РФ",
+      "note": null
+    },
+    "Kommersant Business": {
+      "brief": "market",
+      "topic_category": "Макроэкономика РФ",
+      "note": null
+    },
+    "Interfax Business": {
+      "brief": "market",
+      "topic_category": "Макроэкономика РФ",
+      "note": null
+    },
+    "TG markettwits": {
+      "brief": "market",
+      "topic_category": "Макроэкономика мира",
+      "note": null
+    },
+    "TG rbc_news": {
+      "brief": "market",
+      "topic_category": "Макроэкономика РФ",
+      "note": null
+    },
+    "TG frank_media": {
+      "brief": "market",
+      "topic_category": "Макроэкономика РФ",
+      "note": null
+    },
+    "TG Novostal_M": {
+      "brief": "all",
+      "topic_category": "Металлургия РФ",
+      "note": "офиц канал Новосталь М"
+    },
+    "TG marketsnapshot": {
+      "brief": "market",
+      "topic_category": "Макроэкономика РФ",
+      "note": null
+    },
+    "TG zakupki_time": {
+      "brief": "market",
+      "topic_category": "Макроэкономика РФ",
+      "note": null
+    },
+    "TG banksta": {
+      "brief": "market",
+      "topic_category": "Макроэкономика мира",
+      "note": null
+    },
+    "TG WCIOMofficial": {
+      "brief": "market",
+      "topic_category": "Макроэкономика РФ",
+      "note": "ВЦИОМ"
+    },
+    "TG truecon": {
+      "brief": "market",
+      "topic_category": "Макроэкономика РФ",
+      "note": "Егор Сусин"
+    },
+    "TG Investovization_official": {
+      "brief": "market",
+      "topic_category": "Макроэкономика мира",
+      "note": null
+    },
+    "TG MMIPRO": {
+      "brief": "market",
+      "topic_category": "Макроэкономика мира",
+      "note": null
+    },
+    "TG chinesepanorama": {
+      "brief": "news",
+      "topic_category": "Китай",
+      "note": null
+    },
+    "TG omyinvestments": {
+      "brief": "all",
+      "topic_category": "Макроэкономика РФ",
+      "note": "ВТБ"
+    },
+    "TG cbrstocks": {
+      "brief": "all",
+      "topic_category": "Макроэкономика мира",
+      "note": "Сигналы РЦБ"
+    },
+    "TG SberInvestments": {
+      "brief": "all",
+      "topic_category": "Макроэкономика РФ",
+      "note": "Сбер"
+    },
+    "TG prometallinfo": {
+      "brief": "all",
+      "topic_category": "Металлургия РФ",
+      "note": null
+    },
+    "TG BIoomberg": {
+      "brief": "news",
+      "topic_category": "Макроэкономика мира",
+      "note": null
+    },
+    "TG forbesrussia": {
+      "brief": "market",
+      "topic_category": "Макроэкономика РФ",
+      "note": null
+    },
+    "TG Coala_russia": {
+      "brief": "all",
+      "topic_category": "Металлургия мира",
+      "note": "Уголь"
+    },
+    "TG centralbank_russia": {
+      "brief": "market",
+      "topic_category": "Макроэкономика РФ",
+      "note": null
+    },
+    "TG MarketDumki": {
+      "brief": "market",
+      "topic_category": "Макроэкономика мира",
+      "note": null
+    },
+    "TG NedraProm": {
+      "brief": "market",
+      "topic_category": "Макроэкономика РФ",
+      "note": null
+    },
+    "TG Pro_smarent": {
+      "brief": "all",
+      "topic_category": "Макроэкономика РФ",
+      "note": null
+    },
+    "TG uralsteelnews": {
+      "brief": "all",
+      "topic_category": "Металлургия РФ",
+      "note": null
+    },
+    "TG Metals_Mining": {
+      "brief": "all",
+      "topic_category": "Металлургия мира",
+      "note": null
+    },
+    "TG olegshibanov": {
+      "brief": "market",
+      "topic_category": "Макроэкономика РФ",
+      "note": null
+    },
+    "TG nerzhavey": {
+      "brief": "all",
+      "topic_category": "Металлургия РФ",
+      "note": null
+    },
+    "TG profitanet": {
+      "brief": "market",
+      "topic_category": "Макроэкономика РФ",
+      "note": null
+    },
+    "TG russianmacro": {
+      "brief": "market",
+      "topic_category": "Макроэкономика мира",
+      "note": null
+    },
+    "TG spydell_finance": {
+      "brief": "market",
+      "topic_category": "Макроэкономика мира",
+      "note": null
+    },
+    "TG InvestHeroes": {
+      "brief": "news",
+      "topic_category": "Макроэкономика РФ",
+      "note": null
+    },
+    "TG metaltorgnews": {
+      "brief": "all",
+      "topic_category": "Металлургия РФ",
+      "note": null
+    },
+    "TG proeconomics": {
+      "brief": "market",
+      "topic_category": "Макроэкономика РФ",
+      "note": null
+    },
+    "TG metallplace": {
+      "brief": "all",
+      "topic_category": "Металлургия РФ",
+      "note": null
+    },
+    "TG xtxixty": {
+      "brief": "market",
+      "topic_category": "Макроэкономика РФ",
+      "note": "Твердые цифры"
+    },
+    "TG mminewschannel": {
+      "brief": "market",
+      "topic_category": "Макроэкономика РФ",
+      "note": null
+    },
+    "TG tmk_group": {
+      "brief": "all",
+      "topic_category": "Металлургия РФ",
+      "note": null
+    },
+    "TG rspmru": {
+      "brief": "all",
+      "topic_category": "Металлургия РФ",
+      "note": null
+    },
+    "TG workingpaper": {
+      "brief": "market",
+      "topic_category": "Макроэкономика мира",
+      "note": "отчеты"
+    },
+    "TG zavod_stalnoy_drobi": {
+      "brief": "all",
+      "topic_category": "Металлургия РФ",
+      "note": null
+    },
+    "TG metalswire": {
+      "brief": "market",
+      "topic_category": "Металлургия мира",
+      "note": null
+    },
+    "TG c0ldness": {
+      "brief": "market",
+      "topic_category": "Макроэкономика РФ",
+      "note": "холодный расчет (Исаков)"
+    },
+    "TG acirussia": {
+      "brief": "market",
+      "topic_category": "Макроэкономика РФ",
+      "note": null
+    },
+    "TG truevalue": {
+      "brief": "market",
+      "topic_category": "Макроэкономика РФ",
+      "note": "Тунев"
+    },
+    "TG id_1576184579": {
+      "brief": null,
+      "topic_category": null,
+      "note": "Удалить, не актуален"
+    },
+    "TG pbc_index": {
+      "brief": "market",
+      "topic_category": "Макроэкономика РФ",
+      "note": null
+    },
+    "TG Astra_AMFM": {
+      "brief": "market",
+      "topic_category": "Макроэкономика РФ",
+      "note": null
+    },
+    "TG the_edgers": {
+      "brief": null,
+      "topic_category": null,
+      "note": "Удалить, не актуален"
+    },
+    "TG evrazcom": {
+      "brief": "all",
+      "topic_category": "Металлургия РФ",
+      "note": null
+    },
+    "TG corpfinguru": {
+      "brief": "market",
+      "topic_category": "Макроэкономика РФ",
+      "note": null
+    },
+    "TG cmasf": {
+      "brief": "market",
+      "topic_category": "Макроэкономика РФ",
+      "note": null
+    },
+    "TG Oper_Steel": {
+      "brief": "all",
+      "topic_category": "Металлургия РФ",
+      "note": null
+    },
+    "TG domusverus": {
+      "brief": "market",
+      "topic_category": "Макроэкономика РФ",
+      "note": null
+    },
+    "TG vtorion": {
+      "brief": "market",
+      "topic_category": "Металлургия мира",
+      "note": null
+    },
+    "TG cladovye": {
+      "brief": "market",
+      "topic_category": "Макроэкономика мира",
+      "note": "отчеты"
+    },
+    "TG fiscalrule": {
+      "brief": "market",
+      "topic_category": "Макроэкономика РФ",
+      "note": null
+    },
+    "TG MetallurgyNow": {
+      "brief": "all",
+      "topic_category": "Металлургия мира",
+      "note": null
+    },
+    "TG ReutersWorldChannel": {
+      "brief": "market",
+      "topic_category": "Макроэкономика мира",
+      "note": null
+    },
+    "TG dmitrypolevoy": {
+      "brief": "market",
+      "topic_category": "Макроэкономика РФ",
+      "note": null
+    },
+    "TG economikal": {
+      "brief": "market",
+      "topic_category": "Макроэкономика РФ",
+      "note": null
+    },
+    "TG daokedao": {
+      "brief": "market",
+      "topic_category": "Китай",
+      "note": null
+    },
+    "TG thebell_io": {
+      "brief": "market",
+      "topic_category": "Макроэкономика РФ",
+      "note": "The Bell"
+    },
+    "Отчеты CRU": {
+      "brief": "all",
+      "topic_category": "Металлургия мира",
+      "note": null
+    },
+    "Отчеты Mysteel": {
+      "brief": "all",
+      "topic_category": "Китай",
+      "note": null
+    },
+    "Отчеты Металлинфо": {
+      "brief": "market",
+      "topic_category": "Металлургия мира",
+      "note": null
+    },
+    "Отчеты Kallanish": {
+      "brief": null,
+      "topic_category": "Металлургия мира",
+      "note": null
+    },
+    "Отчеты (загрузки пользователем) другие": {
+      "brief": null,
+      "topic_category": "Макроэкономика мира",
+      "note": null
+    }
+  }
+}

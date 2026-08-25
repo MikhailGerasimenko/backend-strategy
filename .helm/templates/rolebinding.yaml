@@ -1,0 +1,29 @@
+{{- if (and .Values.rbac (eq .Values.rbac.enabled true) (.Values.rbac.role)) }}
+{{- $fullName := include "fullname" . -}}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $fullName }}-rolebinding
+  labels:
+  {{- include "labels" . | nindent 4 }}
+  {{- if .Values.rbac.additionalLabels }}
+  {{- toYaml .Values.rbac.additionalLabels | nindent 4 }}
+  {{- end }}
+  {{- if .Values.rbac.annotations }}
+  annotations:
+  {{- toYaml .Values.rbac.annotations | nindent 4 }}
+  {{- end }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ $fullName }}-role
+subjects:
+  - kind: ServiceAccount
+    {{- if .Values.rbac.serviceAccount.create }}
+    name: {{ $.Values.rbac.serviceAccount.name }}
+    {{- else }}
+    name: default
+    {{- end }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

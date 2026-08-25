@@ -1,0 +1,34 @@
+{{- if (and .Values.podMonitor (eq .Values.podMonitor.enabled true)) }}
+{{- $fullName := include "fullname" . -}}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: {{ $fullName }}-pod-monitor
+  labels:
+  {{- if .Values.podMonitor.monitorLabels }}
+  {{- toYaml .Values.podMonitor.monitorLabels | nindent 4 }}
+  {{- else }}
+    release: prometheus
+  {{- end }}
+spec:
+  namespaceSelector:
+  {{- if .Values.podMonitor.namespaceSelector }}
+    matchNames:
+  {{- toYaml .Values.podMonitor.namespaceSelector | nindent 6 }}
+  {{- else }}
+    matchNames:
+      - {{ .Release.Namespace }}
+  {{- end }}
+  podMetricsEndpoints:
+  - interval: {{ .Values.podMonitor.interval | default "30s" }}
+    port: {{ (index .Values.podMonitor "port") | default (index (index .Values.service "ports") 0 "name") }}
+    path: {{ .Values.podMonitor.path }}
+  selector:
+    matchLabels:
+    {{- if .Values.podMonitor.matchLabels }}
+    {{- toYaml .Values.podMonitor.matchLabels | nindent 6 }}
+    {{- else }}
+    {{- include "selectorLabels" . | nindent 6 }}
+    {{- end }}
+{{- end }}

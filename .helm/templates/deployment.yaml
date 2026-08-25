@@ -1,0 +1,219 @@
+{{- $fullName := include "fullname" . -}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+  {{- include "labels" . | nindent 4 }}
+  {{- with .Values.deployment.additionalLabels -}}
+  {{- toYaml . | nindent 4 }}
+  {{- end }}
+  annotations:
+  {{- if or .Values.deployment.annotations .Values.deployment.reloadOnChange.enabled }}
+  {{- if .Values.deployment.annotations }}
+  {{- toYaml .Values.deployment.annotations | nindent 4 }}
+  {{- end }}
+  {{- if .Values.deployment.reloadOnChange.enabled }}
+  {{- if and .Values.deployment.reloadOnChange.configMapOnChange .Values.deployment.reloadOnChange.secretOnChange }}
+    configmap.reloader.stakater.com/reload: "{{ .Values.deployment.reloadOnChange.configMapOnChange }}"
+    secret.reloader.stakater.com/reload: "{{ .Values.deployment.reloadOnChange.secretOnChange }}{{ if .Values.secrets.platformCommon.enabled }},{{ $fullName }}-platform-common{{ end }}"
+    {{- else if .Values.deployment.reloadOnChange.configMapOnChange }}
+    configmap.reloader.stakater.com/reload: "{{ .Values.deployment.reloadOnChange.configMapOnChange }}"
+    {{- else if .Values.deployment.reloadOnChange.secretOnChange }}
+    secret.reloader.stakater.com/reload: "{{ .Values.deployment.reloadOnChange.secretOnChange }}{{ if .Values.secrets.platformCommon.enabled }},{{ $fullName }}-platform-common{{ end }}"
+    {{- else if .Values.secrets.platformCommon.enabled }}
+    secret.reloader.stakater.com/reload: "{{ $fullName }}-platform-common,{{ $fullName }}-secret"
+    {{- else }}
+    reloader.stakater.com/auto: "true"
+  {{- end }}
+  {{- end }}
+  {{- end }}
+  name: {{ $fullName }}
+spec:
+  replicas: {{ .Values.deployment.replicas }}
+  selector:
+    matchLabels:
+    {{- include "selectorLabels" . | nindent 6 }}
+  {{- if .Values.deployment.strategy }}
+  strategy:
+  {{- toYaml .Values.deployment.strategy | nindent 4 }}
+  {{- end }}
+  template:
+    metadata:
+      labels:
+      {{- include "selectorLabels" . | nindent 8 }}
+      {{- if .Values.deployment.podLabels }}
+      {{- toYaml .Values.deployment.podLabels | nindent 8 }}
+      {{- end }}
+    spec:
+      {{- if .Values.deployment.hostAliases }}
+      hostAliases:
+      {{- toYaml .Values.deployment.hostAliases | nindent 6 }}
+      {{- end }}
+      {{- if .Values.deployment.initContainers }}
+      initContainers:
+      {{- range $key, $value := .Values.deployment.initContainers  }}
+      - name: {{ $key }}
+      {{- include "tplvalues.render" ( dict "value" $value "context" $ ) | nindent 8 }}
+      {{- end }}
+      {{- end }}
+      {{- if .Values.deployment.nodeSelector }}
+      nodeSelector:
+      {{- toYaml .Values.deployment.nodeSelector | nindent 8 }}
+      {{- end }}
+      {{- if .Values.deployment.tolerations }}
+      tolerations:
+      {{- toYaml .Values.deployment.tolerations | nindent 6 }}
+      {{- end }}
+      {{- if .Values.deployment.affinity }}
+      affinity:
+      {{- toYaml .Values.deployment.affinity | nindent 8 }}
+      {{- end }}
+      imagePullSecrets:
+      - name: {{ .Values.global.imagePullSecrets | default "container-registry" }}
+      containers:
+      - name: {{ $fullName }}
+        {{- if .Values.deployment.image }}
+        image: "{{ .Values.deployment.image.repository }}:{{ .Values.deployment.image.tag }}"
+        {{- else }}
+        image: "{{ .Values.global.image.repository }}:{{ .Values.global.image.tag }}"
+        {{- end }}
+        {{- if .Values.deployment.imagePullPolicy }}
+        imagePullPolicy: {{ .Values.deployment.imagePullPolicy | default "Always" }}
+        {{- else }}
+        imagePullPolicy: {{ .Values.global.imagePullPolicy | default "Always" }}
+        {{- end }}
+        {{- if .Values.deployment.command }}
+        command: {{- include "tplvalues.render" (dict "value" .Values.deployment.command "context" $) | nindent 8 }}
+        {{- end }}
+        {{- if .Values.deployment.ports }}
+        ports:
+        {{- toYaml .Values.deployment.ports | nindent 8 }}
+        {{- end }}
+        {{- if .Values.deployment.env }}
+        env:
+        {{- toYaml .Values.deployment.env | nindent 8 }}
+        {{- end }}
+        envFrom:
+        {{- if and (eq .Values.secrets.enabled true) (ne .Values.secrets.env false) }}
+        {{- if .Values.secrets.platformCommon.enabled }}
+          - secretRef:
+              name: {{ $fullName }}-platform-common
+        {{- end }}
+          - secretRef:
+              name: {{ $fullName }}-secret
+        {{- if .Values.secrets.common }}
+          - secretRef:
+              name: {{ $fullName }}-common
+        {{- end }}
+        {{- end }}
+        {{- if .Values.deployment.additionalEnvFrom  }}
+        {{- range $value := .Values.deployment.additionalEnvFrom.configMap }}
+          - configMapRef:
+              name: {{ $value }}
+        {{- end }}
+        {{- range $value := .Values.deployment.additionalEnvFrom.secret }}
+          - secretRef:
+              name: {{ $value }}
+        {{- end }}
+        {{- end }}
+        {{- if .Values.deployment.probes }}
+        {{- if .Values.deployment.probes.startupProbe }}
+        startupProbe:
+        {{- toYaml .Values.deployment.probes.startupProbe | nindent 10 }}
+        {{- end }}
+        {{- if .Values.deployment.probes.livenessProbe }}
+        livenessProbe:
+        {{- toYaml .Values.deployment.probes.livenessProbe | nindent 10 }}
+        {{- end }}
+        {{- if .Values.deployment.probes.readinessProbe }}
+        readinessProbe:
+        {{- toYaml .Values.deployment.probes.readinessProbe | nindent 10 }}
+        {{- end }}
+        {{- end }}
+        {{- if or .Values.secrets.files .Values.secrets.commonFiles .Values.pvc .Values.deployment.additionalPVC .Values.deployment.additionalMounts }}
+        volumeMounts:
+        {{- range .Values.secrets.files }}
+        - name: {{ $fullName }}-{{ .name | replace "." "-" }}
+          mountPath: {{ .path }}
+          subPath: {{ .name }}
+        {{- end }}
+        {{- range .Values.secrets.commonFiles }}
+        - name: {{ $fullName }}-{{ .name | replace "." "-" }}-common-files
+          mountPath: {{ .path }}
+          subPath: {{ .name }}
+        {{- end }}
+        {{- range .Values.pvc }}
+        - name: {{ .name }}
+          mountPath: {{ .mountPath }}
+        {{- end }}
+        {{- range .Values.deployment.additionalPVC }}
+        - name: {{ .name }}
+          mountPath: {{ .mountPath }}
+        {{- end }}
+        {{- if .Values.deployment.additionalMounts }}
+        {{- range .Values.deployment.additionalMounts.secret }}
+        - name: {{ .name }}
+          mountPath: {{ .mountPath }}
+          subPath: {{ (splitList "/" .mountPath ) | last }}
+        {{- end }}
+        {{- range .Values.deployment.additionalMounts.configMap }}
+        - name: {{ .name }}
+          mountPath: {{ .mountPath }}
+          subPath: {{ (splitList "/" .mountPath ) | last }}
+        {{- end }}
+        {{- end }}
+        {{- end }}
+        {{- with .Values.deployment.resources }}
+        resources:
+        {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- if .Values.deployment.containerSecurityContext }}
+        securityContext:
+        {{- toYaml .Values.deployment.containerSecurityContext | nindent 10 }}
+        {{- end }}
+      {{- if .Values.deployment.securityContext }}
+      securityContext:
+      {{- toYaml .Values.deployment.securityContext | nindent 8 }}
+      {{- end }}
+      {{- if or .Values.pvc .Values.deployment.additionalPVC .Values.secrets.files .Values.secrets.commonFiles .Values.deployment.additionalMounts }}
+      volumes:
+      {{- range .Values.pvc }}
+      - name: {{ .name }}
+        persistentVolumeClaim:
+          claimName: {{ $fullName }}-{{ .name }}
+      {{- end }}
+      {{- range .Values.deployment.additionalPVC }}
+      - name: {{ .name }}
+        persistentVolumeClaim:
+          claimName: {{ .name }}
+      {{- end }}
+      {{- range .Values.secrets.files }}
+      - name: {{ $fullName }}-{{ .name | replace "." "-" }}
+        secret:
+          secretName: {{ $fullName }}-{{ .name | replace "." "-" }}
+      {{- end }}
+      {{- range .Values.secrets.commonFiles }}
+      - name: {{ $fullName }}-{{ .name | replace "." "-" }}-common-files
+        secret:
+          secretName: {{ $fullName }}-{{ .name | replace "." "-" }}-common-files
+      {{- end }}
+      {{- if .Values.deployment.additionalMounts }}
+      {{- range .Values.deployment.additionalMounts.secret }}
+      - name: {{ .name }}
+        secret:
+          secretName: {{ .name }}
+      {{- end }}
+      {{- range .Values.deployment.additionalMounts.configMap }}
+      - name: {{ .name }}
+        configMap:
+          name: {{ .name }}
+      {{- end }}
+      {{- end }}
+      {{- end }}
+      {{- if .Values.deployment.terminationGracePeriodSeconds }}
+      terminationGracePeriodSeconds: {{ .Values.deployment.terminationGracePeriodSeconds }}
+      {{- end }}
+      {{- if (and .Values.rbac (eq .Values.rbac.enabled true) (eq .Values.rbac.serviceAccount.create true)) }}
+      serviceAccountName: {{ .Values.rbac.serviceAccount.name }}
+      {{- end }}

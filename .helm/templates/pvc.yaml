@@ -1,0 +1,21 @@
+{{- if .Values.pvc }}
+{{- $fullName := include "fullname" . -}}
+{{- range .Values.pvc }}
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: {{ $fullName }}-{{ .name }}
+  {{- if .annotations }}
+  annotations:
+  {{- toYaml .annotations | nindent 4 }}
+  {{- end }}
+spec:
+  storageClassName: {{ .storageClassName | default "ceph-rbd-sc" }}
+  accessModes:
+    - {{ .accessModes | default "ReadWriteOnce" }}
+  resources:
+    requests:
+      storage: {{ .size }}
+{{- end }}
+{{- end }}

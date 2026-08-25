@@ -1,0 +1,140 @@
+.auth-page {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: var(--bg, #f0f2f5);
+}
+
+.auth-brand {
+  width: 100%;
+  max-width: 420px;
+  margin-bottom: 1.25rem;
+  padding: 1.25rem 1.5rem;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 12px rgba(0, 40, 100, 0.08);
+  box-sizing: border-box;
+}
+
+.auth-brand .brand-logo {
+  display: block;
+  width: 100%;
+  max-width: 360px;
+  height: auto;
+  margin: 0 auto;
+  object-fit: contain;
+}
+
+.auth-card {
+  width: 100%;
+  max-width: 420px;
+  background: #fff;
+  border-radius: 12px;
+  padding: 2rem;
+  box-shadow: 0 4px 24px rgba(0, 40, 100, 0.1);
+  border: 1px solid #d8dee6;
+}
+
+.auth-card h1 {
+  margin: 0 0 0.35rem;
+  font-size: 1.35rem;
+  color: #003876;
+}
+
+.auth-card .subtitle {
+  margin: 0 0 1.5rem;
+  color: #5c6b7a;
+  font-size: 0.9rem;
+}
+
+.auth-field {
+  margin-bottom: 1rem;
+}
+
+.auth-field label {
+  display: block;
+  font-weight: 500;
+  margin-bottom: 0.35rem;
+  font-size: 0.9rem;
+}
+
+.auth-field input {
+  width: 100%;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #d8dee6;
+  border-radius: 8px;
+  font-size: 1rem;
+}
+
+.auth-field input:focus {
+  outline: 2px solid #00387633;
+  border-color: #003876;
+}
+
+.auth-hint {
+  font-size: 0.8rem;
+  color: #5c6b7a;
+  margin-top: 0.25rem;
+}
+
+.auth-hint.ok {
+  color: #0d7a4a;
+}
+
+.auth-hint.err {
+  color: #b91c1c;
+}
+
+.auth-error {
+  background: #fee2e2;
+  color: #b91c1c;
+  padding: 0.6rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+}
+
+.auth-submit {
+  width: 100%;
+  margin-top: 0.5rem;
+  padding: 0.75rem;
+  background: #003876;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.auth-submit:hover {
+  background: #002a5c;
+}
+
+.auth-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auth-footer {
+  margin-top: 1.25rem;
+  text-align: center;
+  font-size: 0.9rem;
+  color: #5c6b7a;
+}
+
+.auth-footer a {
+  color: #003876;
+  font-weight: 600;
+}
+
+.login-hint {
+  margin: 0 0 1rem;
+  padding: 0.5rem 0.65rem;
+  background: #f4f7fb;
+  border-radius: 6px;
+  line-height: 1.4;
+}

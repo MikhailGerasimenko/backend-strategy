@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Свои источники — Стратегический навигатор</title>
+  <link rel="stylesheet" href="/static/style.css?v=20260813a" />
+</head>
+<body class="app-shell" data-page="sources">
+  <aside class="app-sidebar" aria-label="Навигация">
+    <div class="sidebar-brand">
+      <img src="/static/images/severstal-logo.png" alt="Северсталь" class="sidebar-logo" />
+    </div>
+    <nav class="sidebar-nav">
+      <p class="sidebar-group-label">Данные</p>
+      <a class="sidebar-link" href="/#attachmentPanel">Дополнительные документы в RAG</a>
+      <a class="sidebar-link" href="/#attachmentLibrary">Библиотека документов</a>
+      <a class="sidebar-link active" href="/sources">Свои источники</a>
+
+      <p class="sidebar-group-label">Бриф</p>
+      <a class="sidebar-link" href="/#sourcesPanel">Источники</a>
+      <a class="sidebar-link" href="/#promptPanel">Системный промпт</a>
+      <a class="sidebar-link" href="/#periodPanel">Бриф за период</a>
+
+      <p class="sidebar-group-label">Разделы</p>
+      <a class="sidebar-link" href="/agent">Агент</a>
+    </nav>
+    <div class="sidebar-footer">
+      <span class="sidebar-user" id="userName">—</span>
+      <button type="button" class="btn-logout sidebar-logout" id="btnLogout">Выйти</button>
+    </div>
+  </aside>
+
+  <div class="app-content">
+    <header class="page-header">
+      <h1>Свои источники</h1>
+      <p class="subtitle">Публичные Telegram-каналы, которые коллеги добавляют сами</p>
+    </header>
+
+    <main class="container">
+      <section class="card">
+        <h2>Добавить канал</h2>
+        <p class="help">
+          Нужен <strong>публичный</strong> канал (виджет t.me/s/…). Приватные invite-ссылки
+          не подойдут. Категория — как на странице брифа: можно выбрать из списка или вписать свою.
+        </p>
+        <form id="addSourceForm" class="custom-source-form">
+          <div class="custom-source-field">
+            <label for="tgUrl">Ссылка на Telegram-канал</label>
+            <input
+              type="text"
+              id="tgUrl"
+              name="url"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="https://t.me/rbc_news"
+            />
+          </div>
+          <div class="custom-source-field">
+            <label for="tgCategory">Категория</label>
+            <input
+              type="text"
+              id="tgCategory"
+              name="topic_category"
+              list="knownCategories"
+              autocomplete="off"
+              placeholder="Выберите или введите свою"
+            />
+            <datalist id="knownCategories"></datalist>
+          </div>
+          <label class="check custom-source-parse">
+            <input type="checkbox" id="parseYesterday" checked />
+            Сразу спарсить новости за вчера
+          </label>
+          <div class="btn-row">
+            <button type="submit" class="btn primary" id="btnAddSource">Добавить</button>
+          </div>
+        </form>
+        <p class="hint" id="addSourceHint"></p>
+      </section>
+
+      <section class="card">
+        <h2>Добавленные каналы</h2>
+        <p class="help">
+          Они появляются в списке источников брифа в выбранной категории.
+          Ночной парсинг (00:30 МСК) подхватывает их автоматически.
+        </p>
+        <p class="hint" id="customListStatus">Загрузка…</p>
+        <div class="attachment-table-wrap data-table-wrap" id="customTableWrap">
+          <table class="attachment-table data-table" id="customTable" hidden>
+            <thead>
+              <tr>
+                <th>Канал</th>
+                <th>Категория</th>
+                <th>Кто добавил</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="customTableBody"></tbody>
+          </table>
+        </div>
+        <pre class="log" id="parseLog" hidden></pre>
+      </section>
+    </main>
+  </div>
+
+  <script src="/static/sources.js?v=20260813a"></script>
+</body>
+</html>

@@ -1,0 +1,36 @@
+{
+  "accounts": [
+    {
+      "login": "admin",
+      "full_name": "Администратор",
+      "role": "admin",
+      "enabled": true
+    },
+    {
+      "login": "vorobiev",
+      "full_name": "Воробьев Павел Владимирович",
+      "role": "user",
+      "enabled": true
+    },
+    {
+      "login": "shmonov",
+      "full_name": "Шмонов Роман Игоревич",
+      "enabled": true
+    },
+    {
+      "login": "khabotina",
+      "full_name": "Хаботина Дарья Владимировна",
+      "enabled": true
+    },
+    {
+      "login": "m.semenovyh",
+      "full_name": "Семеновых Максим Леонидович",
+      "enabled": true
+    },
+    {
+      "login": "maksimov",
+      "full_name": "Максимов Ростислав Андреевич",
+      "enabled": true
+    }
+  ]
+}

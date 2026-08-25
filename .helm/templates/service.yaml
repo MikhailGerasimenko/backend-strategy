@@ -1,0 +1,25 @@
+{{- $fullName := include "fullname" . -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $fullName }}
+  labels:
+  {{- include "labels" . | nindent 4 }}
+  {{- with .Values.service.additionalLabels -}}
+  {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- if .Values.service.annotations }}
+  annotations:
+  {{- toYaml .Values.service.annotations | nindent 4 }}
+  {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    {{- range .Values.service.ports }}
+    - name: {{ .name }}
+      protocol: {{ .protocol }}
+      port: {{ .port }}
+      targetPort: {{ .targetPort }}
+    {{- end }}
+  selector:
+  {{- include "selectorLabels" . | nindent 4 }}

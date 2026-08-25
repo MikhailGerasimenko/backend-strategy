@@ -1,0 +1,8 @@
+include:
+  - project: '${SSS_V3_CI_TEMPLATE_PROJECT}'
+    file:
+      - '/python.yml'
+
+variables:
+  SKIP_PUBLISH: "true"
+  DEPLOYMENT_ENVIRONMENT: dev

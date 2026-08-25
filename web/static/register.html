@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Регистрация — Стратегический навигатор</title>
+  <link rel="stylesheet" href="/static/auth.css" />
+</head>
+<body class="auth-page">
+  <div class="auth-brand">
+    <img src="/static/images/severstal-logo.png" alt="Северсталь" class="brand-logo" />
+  </div>
+  <div class="auth-card">
+    <h1>Регистрация</h1>
+    <p class="subtitle">Только для логинов из списка разрешённых. Если аккаунт уже создан — используйте <a href="/login">вход</a>.</p>
+    <p class="auth-hint" id="accountsOverview"></p>
+    <div class="auth-error" id="errorBox" hidden></div>
+    <form id="registerForm">
+      <div class="auth-field">
+        <label for="login">Логин</label>
+        <input type="text" id="login" name="login" autocomplete="username" required />
+        <p class="auth-hint" id="loginHint">Латиница, 3–32 символа. Логин должен быть выдан администратором.</p>
+      </div>
+      <div class="auth-field">
+        <label for="password">Пароль</label>
+        <input type="password" id="password" name="password" autocomplete="new-password" minlength="5" required />
+        <p class="auth-hint">Не короче 5 символов</p>
+      </div>
+      <div class="auth-field">
+        <label for="password2">Повторите пароль</label>
+        <input type="password" id="password2" name="password2" autocomplete="new-password" minlength="5" required />
+      </div>
+      <button type="submit" class="auth-submit" id="submitBtn">Зарегистрироваться</button>
+    </form>
+    <p class="auth-footer">
+      Уже есть аккаунт? <a href="/login">Войти</a>
+    </p>
+  </div>
+  <script>
+    const loginInput = document.getElementById("login");
+    const loginHint = document.getElementById("loginHint");
+    const errorBox = document.getElementById("errorBox");
+    let checkTimer = null;
+
+    async function loadAccountsOverview() {
+      const box = document.getElementById("accountsOverview");
+      try {
+        const res = await fetch("/api/auth/accounts-overview");
+        const data = await res.json();
+        const lines = (data.accounts || []).map((a) => {
+          if (a.can_register) return `${a.login} — можно зарегистрироваться`;
+          if (a.registered) return `${a.login} (${a.full_name}) — уже есть, войдите`;
+          return `${a.login} — недоступен`;
+        });
+        box.textContent = lines.length ? lines.join(" · ") : "";
+        box.className = "auth-hint";
+      } catch {
+        box.textContent = "";
+      }
+    }
+    loadAccountsOverview();
+
+    loginInput.addEventListener("input", () => {
+      clearTimeout(checkTimer);
+      const v = loginInput.value.trim();
+      if (v.length < 3) {
+        loginHint.textContent = "Введите логин (минимум 3 символа)";
+        loginHint.className = "auth-hint";
+        return;
+      }
+      checkTimer = setTimeout(async () => {
+        try {
+          const res = await fetch(`/api/auth/check-login?login=${encodeURIComponent(v)}`);
+          const data = await res.json();
+          if (!data.allowed) {
+            loginHint.textContent = "Логин не в списке разрешённых. Обратитесь к администратору.";
+            loginHint.className = "auth-hint err";
+          } else if (data.registered) {
+            loginHint.textContent = "Уже зарегистрирован — перейдите на страницу входа.";
+            loginHint.className = "auth-hint err";
+          } else {
+            loginHint.textContent = `Можно зарегистрироваться: ${data.full_name || data.login}`;
+            loginHint.className = "auth-hint ok";
+          }
+        } catch {
+          loginHint.textContent = "";
+        }
+      }, 400);
+    });
+
+    document.getElementById("registerForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errorBox.hidden = true;
+      const p1 = document.getElementById("password").value;
+      const p2 = document.getElementById("password2").value;
+      if (p1 !== p2) {
+        errorBox.textContent = "Пароли не совпадают";
+        errorBox.hidden = false;
+        return;
+      }
+      document.getElementById("submitBtn").disabled = true;
+      try {
+        const res = await fetch("/api/auth/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({
+            login: loginInput.value.trim(),
+            password: p1,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          let msg = data.detail || "Ошибка регистрации";
+          if (Array.isArray(data.detail)) {
+            msg = data.detail.map((e) => e.msg || e).join("; ");
+          }
+          if (msg.includes("уже зарегистрирован")) {
+            msg += " Перейдите на страницу входа.";
+          }
+          errorBox.textContent = msg;
+          errorBox.hidden = false;
+          loadAccountsOverview();
+          return;
+        }
+        window.location.href = "/";
+      } catch {
+        errorBox.textContent = "Сервер недоступен";
+        errorBox.hidden = false;
+      } finally {
+        document.getElementById("submitBtn").disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

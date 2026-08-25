@@ -1,0 +1,21 @@
+{{- if (and .Values.pdb (eq .Values.pdb.enabled true)) }}
+{{- if semverCompare ">=1.21.0" .Capabilities.KubeVersion.GitVersion }}
+{{- $fullName := include "fullname" . -}}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  labels:
+  {{- include "labels" . | nindent 4 }}
+  name: {{ $fullName }}
+spec:
+  {{- if .Values.pdb.minAvailable }}
+  minAvailable: {{ .Values.pdb.minAvailable }}
+  {{- else }}
+  maxUnavailable: {{ .Values.pdb.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+    {{- include "selectorLabels" . | nindent 6 }}
+{{- end }}
+{{- end }}

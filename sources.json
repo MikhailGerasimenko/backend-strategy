@@ -1,0 +1,144 @@
+{
+  "sources": [
+    {
+      "name": "MetalInfo Domestic",
+      "parser": "metalinfo",
+      "url": "https://www.metalinfo.ru/ru/news/rferrous.html",
+      "category": "ferrous_domestic",
+      "max_pages": 4,
+      "enabled": true
+    },
+    {
+      "name": "MetalInfo Abroad",
+      "parser": "metalinfo",
+      "url": "https://www.metalinfo.ru/ru/news/rferrousabroad.html",
+      "category": "ferrous_abroad",
+      "max_pages": 4,
+      "enabled": true
+    },
+    {
+      "name": "Eurometal",
+      "parser": "eurometal",
+      "url": "https://eurometal.net/news/",
+      "category": "steel_news",
+      "max_pages": 5,
+      "enabled": true
+    },
+    {
+      "name": "Mysteel",
+      "parser": "mysteel",
+      "url": "https://www.mysteel.net/market-insights/news/",
+      "category": "market_insights",
+      "days_back": 10,
+      "enabled": true
+    },
+    {
+      "name": "Yieh Corp",
+      "parser": "yieh",
+      "url": "https://yieh.com/en/News?nDivision=A2",
+      "category": "carbon_steel",
+      "max_pages": 5,
+      "enabled": true
+    },
+    {
+      "name": "GMK.Center",
+      "parser": "generic_html",
+      "url": "https://gmk.center/news/",
+      "category": "steel_news",
+      "max_pages": 3,
+      "use_browser": true,
+      "enabled": false,
+      "note": "Отключён: агрессивная анти-бот защита (JS-challenge на всех эндпоинтах, детектит headless). Нужен внешний unblocker API (ZenRows/ScrapingBee/Bright Data)."
+    },
+    {
+      "name": "Reuters Economy",
+      "parser": "reuters_sitemap",
+      "url": "https://www.reuters.com/markets/econ-world/",
+      "sitemap_url": "https://www.reuters.com/arc/outboundfeeds/news-sitemap/?outputType=xml",
+      "path_prefixes": [
+        "/business/finance/",
+        "/business/energy/",
+        "/business/take-five/",
+        "/markets/"
+      ],
+      "exclude_path_fragments": [
+        "/business/healthcare-pharmaceuticals/",
+        "/business/retail-consumer/",
+        "/business/world-at-work/"
+      ],
+      "title_keywords": [
+        "ecb",
+        "fed",
+        "inflation",
+        "stagflation",
+        "economy",
+        "economic",
+        "markets",
+        "wall st",
+        "futures",
+        "oil prices",
+        "rates",
+        "tariff"
+      ],
+      "category": "global_economy",
+      "max_pages": 1,
+      "max_items": 30,
+      "enabled": true
+    },
+    {
+      "name": "Bloomberg Economics",
+      "parser": "generic_html",
+      "url": "https://www.bloomberg.com/economics",
+      "category": "global_economy",
+      "max_pages": 1,
+      "enabled": true
+    },
+    {
+      "name": "RBC Economics",
+      "parser": "generic_html",
+      "url": "https://www.rbc.ru/rubric/economics",
+      "category": "economics",
+      "max_pages": 1,
+      "enabled": true
+    },
+    {
+      "name": "Kommersant Business",
+      "parser": "generic_html",
+      "url": "https://www.kommersant.ru/rubric/3",
+      "category": "business",
+      "max_pages": 1,
+      "enabled": true
+    },
+    {
+      "name": "Interfax Business",
+      "parser": "generic_html",
+      "url": "https://www.interfax.ru/business/",
+      "category": "business",
+      "max_pages": 1,
+      "enabled": true
+    }
+  ],
+  "telegram": {
+    "enabled": true,
+    "category": "telegram",
+    "channels_file": "telegram_channels.json",
+    "min_text_length": 30,
+    "proxy_url": null,
+    "comment_proxy": "Для РФ: socks5://127.0.0.1:1080 или http://user:pass@host:port. Также TELEGRAM_PROXY в .env"
+  },
+  "keyword_filter": {
+    "enabled": false,
+    "blocks_file": "keyword_blocks.json",
+    "default_block": null,
+    "comment": "Выключен: в БД/RAG попадают все новости без отсечения по ключам. Включить: enabled=true или CLI --keyword-filter."
+  },
+  "relevance_filter": {
+    "enabled": false,
+    "window_size": 15,
+    "comment": "Старый фильтр prefix+suffix (steel_dozor). Не совмещать с keyword_filter."
+  },
+  "metalinfo": {
+    "use_browser": true,
+    "comment": "ngenix JS-challenge на metalinfo.ru. Нужны: pip install playwright && python3 -m playwright install chromium"
+  }
+}

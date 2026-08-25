@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ИИ-агент по новостям — Стратегический навигатор</title>
+  <link rel="stylesheet" href="/static/style.css?v=20260814c" />
+</head>
+<body class="app-shell" data-page="agent">
+  <aside class="app-sidebar" aria-label="Навигация">
+    <div class="sidebar-brand">
+      <img src="/static/images/severstal-logo.png" alt="Северсталь" class="sidebar-logo" />
+    </div>
+    <nav class="sidebar-nav">
+      <p class="sidebar-group-label">Данные</p>
+      <a class="sidebar-link" href="/#attachmentPanel" data-nav="attachmentPanel">Дополнительные документы в RAG</a>
+      <a class="sidebar-link" href="/#attachmentLibrary" data-nav="attachmentLibrary">Библиотека документов</a>
+      <a class="sidebar-link" href="/sources">Свои источники</a>
+
+      <p class="sidebar-group-label">Бриф</p>
+      <a class="sidebar-link" href="/#sourcesPanel" data-nav="sourcesPanel">Источники</a>
+      <a class="sidebar-link" href="/#promptPanel" data-nav="promptPanel">Системный промпт</a>
+      <a class="sidebar-link" href="/#periodPanel" data-nav="periodPanel">Бриф за период</a>
+
+      <p class="sidebar-group-label">Разделы</p>
+      <a class="sidebar-link" href="#agentPromptPanel" data-nav="agentPromptPanel">Промпт агента</a>
+      <a class="sidebar-link active" href="/agent" data-nav="agent">Агент</a>
+    </nav>
+    <div class="sidebar-footer">
+      <span class="sidebar-user" id="userName">—</span>
+      <button type="button" class="btn-logout sidebar-logout" id="btnLogout">Выйти</button>
+    </div>
+  </aside>
+
+  <div class="app-content">
+    <header class="page-header">
+      <h1>ИИ-агент</h1>
+      <p class="subtitle">Обычный чат + поиск по базе новостей и документов (Kallanish/PDF) со ссылками</p>
+    </header>
+
+    <main class="container">
+      <section class="card status-bar" id="configStatus">
+        <span class="badge" id="apiBadge">Проверка…</span>
+        <span class="hint" id="modelHint"></span>
+        <span class="hint" id="pgHint"></span>
+      </section>
+
+      <section class="card" id="agentPromptPanel">
+        <div class="agent-prompt-header">
+          <div>
+            <h2>Системный промпт агента</h2>
+            <p class="help">
+              Задаёт роль и правила до ответа. Редактируйте перед вопросом — текст уйдёт
+              вместе с запросом. Правки сохраняются в этом браузере.
+            </p>
+          </div>
+          <div class="agent-prompt-actions">
+            <button type="button" class="btn secondary" id="btnToggleAgentPrompt">Свернуть</button>
+            <button type="button" class="btn secondary" id="btnResetAgentPrompt">Сбросить к дефолту</button>
+          </div>
+        </div>
+        <div id="agentPromptBody">
+          <textarea
+            id="agentSystemPrompt"
+            class="agent-system-prompt"
+            rows="12"
+            placeholder="Системный промпт агента…"
+            spellcheck="true"
+          ></textarea>
+          <p class="help agent-prompt-status" id="agentPromptStatus">Загрузка дефолта…</p>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Период поиска (необязательно)</h2>
+        <p class="help">
+          Ограничьте поиск по базе диапазоном дат. Пусто — поиск по всем проиндексированным
+          материалам. Агент отвечает и как обычная нейросеть, и с опорой на базу (ссылки [n]).
+        </p>
+        <div class="period-range">
+          <div class="period-field">
+            <label for="agentStart">С</label>
+            <input type="date" id="agentStart" class="period-input" />
+          </div>
+          <span class="period-separator" aria-hidden="true">→</span>
+          <div class="period-field">
+            <label for="agentEnd">По</label>
+            <input type="date" id="agentEnd" class="period-input" />
+          </div>
+          <button type="button" class="btn secondary" id="btnClearChat">Очистить чат</button>
+        </div>
+      </section>
+
+      <section class="card chat-card">
+        <div class="chat-log" id="chatLog">
+          <div class="chat-msg assistant">
+            <div class="chat-bubble">
+              Привет! Можно спрашивать что угодно — как у обычной нейросети.
+              Если в базе есть новости или Kallanish/PDF по теме, я подтяну их и отмечу ссылками [n].
+              Пример: «Цены на ГК рулон по Kallanish» или «Объясни, что такое HRC».
+            </div>
+          </div>
+        </div>
+        <div class="chat-input-row">
+          <textarea id="chatInput" class="chat-input" rows="2" placeholder="Ваш вопрос…"></textarea>
+          <button type="button" class="btn primary" id="btnSend">Спросить</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="/static/agent.js?v=20260814c"></script>
+</body>
+</html>

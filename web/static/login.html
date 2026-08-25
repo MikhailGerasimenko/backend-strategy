@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Вход — Стратегический навигатор</title>
+  <link rel="stylesheet" href="/static/auth.css" />
+</head>
+<body class="auth-page">
+  <div class="auth-brand">
+    <img src="/static/images/severstal-logo.png" alt="Северсталь" class="brand-logo" />
+  </div>
+  <div class="auth-card">
+    <h1>Стратегический навигатор</h1>
+    <p class="subtitle">Вход для сотрудников</p>
+    <div class="auth-error" id="errorBox" hidden></div>
+    <form id="loginForm">
+      <div class="auth-field">
+        <label for="login">Логин</label>
+        <input type="text" id="login" name="login" autocomplete="username" required />
+      </div>
+      <div class="auth-field">
+        <label for="password">Пароль</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" required />
+      </div>
+      <button type="submit" class="auth-submit" id="submitBtn">Войти</button>
+    </form>
+    <p class="auth-footer">
+      Первый раз? <a href="/register">Регистрация</a> (только для разрешённых аккаунтов)
+    </p>
+  </div>
+  <script>
+    const form = document.getElementById("loginForm");
+    const errorBox = document.getElementById("errorBox");
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      errorBox.hidden = true;
+      document.getElementById("submitBtn").disabled = true;
+      try {
+        const res = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
+          body: JSON.stringify({
+            login: document.getElementById("login").value.trim(),
+            password: document.getElementById("password").value,
+          }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          let msg = data.detail || "Неверный логин или пароль";
+          if (Array.isArray(msg)) {
+            msg = msg.map((e) => e.msg || JSON.stringify(e)).join("; ");
+          }
+          errorBox.textContent = msg;
+          errorBox.hidden = false;
+          return;
+        }
+        window.location.href = "/";
+      } catch {
+        errorBox.textContent = "Сервер недоступен";
+        errorBox.hidden = false;
+      } finally {
+        document.getElementById("submitBtn").disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

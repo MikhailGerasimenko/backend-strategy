@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Стратегический навигатор</title>
+  <link rel="stylesheet" href="/static/style.css?v=20260630" />
+</head>
+<body>
+  <div class="brand-bar">
+    <div class="brand-inner">
+      <img src="/static/images/severstal-logo.png" alt="Северсталь" class="brand-logo" />
+    </div>
+  </div>
+  <header class="header">
+    <div class="header-inner">
+      <div class="header-top">
+        <div>
+          <h1>Стратегический навигатор</h1>
+          <p class="subtitle">Тест системного промпта и просмотр брифа в Word</p>
+        </div>
+        <div class="user-bar">
+          <nav class="top-nav">
+            <a href="/" class="active">Дневные</a>
+            <a href="/weekly">Еженедельные</a>
+            <a href="/agent">Агент</a>
+          </nav>
+          <span id="userName">—</span>
+          <button type="button" class="btn-logout" id="btnLogout">Выйти</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    <section class="card status-bar" id="configStatus">
+      <span class="badge" id="apiBadge">Проверка…</span>
+      <span class="hint" id="modelHint"></span>
+    </section>
+
+    <section class="card admin-only" id="adminPanel" hidden>
+      <h2>Администрирование</h2>
+      <p class="help">Обычно новости синхронизируются с Mac автоматически (<code>scripts/sync-news-to-server.sh</code>). Здесь — ручная загрузка, если нужно.</p>
+
+      <h3 class="section-sub">Загрузка данных</h3>
+      <div class="admin-form">
+        <div class="row">
+          <label for="uploadNewsDate">Дата новостей</label>
+          <input type="date" id="uploadNewsDate" />
+        </div>
+        <div class="row">
+          <label for="newsJsonlFile">JSONL после парсинга</label>
+          <input type="file" id="newsJsonlFile" accept=".jsonl,application/jsonl,application/x-ndjson" />
+        </div>
+        <div class="row">
+          <label for="kallanishFile">Kallanish (Word, необязательно)</label>
+          <input type="file" id="kallanishFile" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+        </div>
+        <p class="kallanish-status" id="kallanishStatus">Проверка Kallanish…</p>
+        <div class="btn-row">
+          <button type="button" class="btn primary" id="btnUploadData">Загрузить данные</button>
+        </div>
+        <p class="upload-hint" id="dataUploadHint"></p>
+        <p class="help">JSONL: <code>strategic_navigator_news_*.jsonl</code> из папки «Новости» на Mac.</p>
+      </div>
+
+      <h3 class="section-sub">Загруженные данные</h3>
+      <p class="help">Удалите данные за день, чтобы повторно загрузить свежий парсинг.</p>
+      <div class="data-table-wrap">
+        <table class="data-table" id="loadedDataTable">
+          <thead>
+            <tr>
+              <th>Дата</th>
+              <th>Новостей</th>
+              <th>Файл</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="loadedDataBody">
+            <tr><td colspan="4" class="empty-row">Нет загруженных данных</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="row admin-delete-row">
+        <label for="deleteDataDate">Удалить за дату</label>
+        <input type="date" id="deleteDataDate" />
+        <label class="check inline-check">
+          <input type="checkbox" id="deleteIncludeBriefs" checked />
+          Вместе с брифами
+        </label>
+        <button type="button" class="btn danger" id="btnDeleteData">Удалить данные</button>
+      </div>
+      <p class="upload-hint" id="deleteDataHint"></p>
+    </section>
+
+    <section class="card">
+      <h2>1. Дата отчёта</h2>
+      <div class="row">
+        <label for="reportDate">День брифа</label>
+        <input type="date" id="reportDate" list="availableDates" />
+        <datalist id="availableDates"></datalist>
+        <button type="button" class="btn secondary" id="btnCheckDay">Проверить</button>
+      </div>
+      <p class="day-info" id="dayInfo">—</p>
+    </section>
+
+    <section class="card">
+      <h2>2. Системный промпт</h2>
+      <p class="help">Выберите шаблон или отредактируйте инструкции для модели вручную.</p>
+      <div class="row actions-top prompt-variant-row">
+        <button type="button" class="btn secondary" id="btnLoadFull">Полный новостной бриф</button>
+        <button type="button" class="btn secondary" id="btnLoadMarket">Рыночный бриф</button>
+        <button type="button" class="btn secondary" id="btnLoadCorporate">Корпоративный бриф</button>
+      </div>
+      <p class="help prompt-kind-hint" id="promptKindHint">Тип брифа: полный</p>
+      <textarea id="systemPrompt" rows="18" placeholder="Вставьте системный промпт…"></textarea>
+    </section>
+
+    <section class="card">
+      <h2>3. Параметры</h2>
+      <div class="options">
+        <label class="check">
+          <input type="checkbox" id="relevantOnly" checked />
+          Только релевантные новости (keyword filter)
+        </label>
+        <label class="check">
+          <input type="checkbox" id="includeKallanish" checked />
+          Учитывать Kallanish (если загружен администратором)
+        </label>
+      </div>
+      <div class="row">
+        <label>Модель OpenRouter</label>
+        <p class="model-readonly" id="modelDisplay">—</p>
+      </div>
+    </section>
+
+    <section class="card actions">
+      <h2>4. Генерация брифа</h2>
+      <p class="help">Генерация по уже загруженным новостям. Обычно 5–20 минут. Не закрывайте вкладку.</p>
+      <div class="btn-row">
+        <button type="button" class="btn primary" id="btnBrief">Сгенерировать бриф → Word</button>
+      </div>
+    </section>
+
+    <section class="card" id="progressCard" hidden>
+      <h2>Ход выполнения</h2>
+      <div class="progress-wrap">
+        <div class="progress-bar" id="progressBar"></div>
+      </div>
+      <p class="job-status" id="jobStatus">—</p>
+      <pre class="log" id="jobLog"></pre>
+      <a class="btn download" id="btnDownload" href="#" hidden>Скачать Word (.docx)</a>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <p>Новости загружает администратор · Ключ OpenRouter в <code>.env</code></p>
+  </footer>
+
+  <script src="/static/app.js?v=20260630"></script>
+</body>
+</html>

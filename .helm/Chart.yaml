@@ -1,0 +1,11 @@
+apiVersion: v2
+name: generic
+description: Generic helm chart for applications
+version: 1.1.3
+home: https://git.severstal.severstalgroup.com/devops-public/helm-charts/templates/generic
+icon: https://gitlab.servicios.gob.mx/uploads/-/system/group/avatar/17/devops.png?width=64
+maintainers:
+- name: Albert Khaliullin
+  email: af.khaliullin@serverstal.com
+- name: Alexander Vidyaev
+  email: aa.vidiaev@serverstal.com
