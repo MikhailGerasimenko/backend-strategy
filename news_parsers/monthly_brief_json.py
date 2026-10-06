@@ -40,6 +40,7 @@ def export_monthly_brief_json(
     brief_kind: str,
     metadata: dict[str, Any] | None = None,
     output_dir: Path,
+    storage_key: str = "",
 ) -> dict[str, Any]:
     """Разобрать текст месячного брифа, записать JSON и вернуть метаданные файла."""
     text = (content or "").strip()
@@ -57,14 +58,16 @@ def export_monthly_brief_json(
         metadata=metadata,
     )
     filename = period_brief_json_filename(period_start, period_end, kind)
-    path = output_dir / filename
+    key = "".join(ch for ch in storage_key if ch.isalnum())[:12]
+    disk_name = f"{Path(filename).stem}__{key}.json" if key else filename
+    path = output_dir / disk_name
     path.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
     return {
         "json_path": str(path),
-        "json_filename": path.name,
+        "json_filename": filename,
         "schema": MONTHLY_BRIEF_JSON_SCHEMA,
         "slides": len(payload.get("slides") or []),
         "brief_kind": kind,

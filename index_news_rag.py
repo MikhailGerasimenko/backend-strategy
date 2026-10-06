@@ -20,7 +20,7 @@ import sys
 from datetime import date, datetime
 from pathlib import Path
 
-from news_parsers.rag.news_store import index_news_jsonl
+from news_parsers.rag.vector_backend import index_news_jsonl
 
 DEFAULT_NEWS_DIR = Path("Новости")
 

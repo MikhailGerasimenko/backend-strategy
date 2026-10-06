@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Свои источники — Стратегический навигатор</title>
-  <link rel="stylesheet" href="/static/style.css?v=20260813a" />
+  <title>Источники — Стратегический навигатор</title>
+  <link rel="stylesheet" href="/static/style.css?v=20260824a" />
 </head>
 <body class="app-shell" data-page="sources">
   <aside class="app-sidebar" aria-label="Навигация">
@@ -15,10 +15,10 @@
       <p class="sidebar-group-label">Данные</p>
       <a class="sidebar-link" href="/#attachmentPanel">Дополнительные документы в RAG</a>
       <a class="sidebar-link" href="/#attachmentLibrary">Библиотека документов</a>
-      <a class="sidebar-link active" href="/sources">Свои источники</a>
+      <a class="sidebar-link active" href="/sources">Источники</a>
 
       <p class="sidebar-group-label">Бриф</p>
-      <a class="sidebar-link" href="/#sourcesPanel">Источники</a>
+      <a class="sidebar-link" href="/#sourcesPanel">Источники брифа</a>
       <a class="sidebar-link" href="/#promptPanel">Системный промпт</a>
       <a class="sidebar-link" href="/#periodPanel">Бриф за период</a>
 
@@ -33,8 +33,11 @@
 
   <div class="app-content">
     <header class="page-header">
-      <h1>Свои источники</h1>
-      <p class="subtitle">Публичные Telegram-каналы, которые коллеги добавляют сами</p>
+      <h1>Источники</h1>
+      <p class="subtitle">
+        Добавление своих Telegram-каналов и отключение любых источников.
+        Уже напарсенные новости остаются в векторной базе.
+      </p>
     </header>
 
     <main class="container">
@@ -80,30 +83,52 @@
       </section>
 
       <section class="card">
-        <h2>Добавленные каналы</h2>
+        <h2>Активные источники</h2>
         <p class="help">
-          Они появляются в списке источников брифа в выбранной категории.
-          Ночной парсинг (00:30 МСК) подхватывает их автоматически.
+          Удаление <strong>только останавливает парсинг</strong>. Новости, которые уже
+          попали в векторную базу, остаются и доступны в брифе и агенте.
+          Свои каналы можно дополнительно спарсить за вчера.
         </p>
-        <p class="hint" id="customListStatus">Загрузка…</p>
-        <div class="attachment-table-wrap data-table-wrap" id="customTableWrap">
-          <table class="attachment-table data-table" id="customTable" hidden>
+        <p class="hint" id="activeListStatus">Загрузка…</p>
+        <div class="attachment-table-wrap data-table-wrap" id="activeTableWrap">
+          <table class="attachment-table data-table" id="activeTable" hidden>
             <thead>
               <tr>
-                <th>Канал</th>
+                <th>Источник</th>
+                <th>Тип</th>
                 <th>Категория</th>
-                <th>Кто добавил</th>
                 <th></th>
               </tr>
             </thead>
-            <tbody id="customTableBody"></tbody>
+            <tbody id="activeTableBody"></tbody>
           </table>
         </div>
         <pre class="log" id="parseLog" hidden></pre>
       </section>
+
+      <section class="card">
+        <h2>Отключённые источники</h2>
+        <p class="help">
+          Их можно вернуть в парсинг. Исторические новости в RAG при этом не меняются.
+        </p>
+        <p class="hint" id="disabledListStatus">Загрузка…</p>
+        <div class="attachment-table-wrap data-table-wrap">
+          <table class="attachment-table data-table" id="disabledTable" hidden>
+            <thead>
+              <tr>
+                <th>Источник</th>
+                <th>Тип</th>
+                <th>Категория</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="disabledTableBody"></tbody>
+          </table>
+        </div>
+      </section>
     </main>
   </div>
 
-  <script src="/static/sources.js?v=20260813a"></script>
+  <script src="/static/sources.js?v=20260824a"></script>
 </body>
 </html>

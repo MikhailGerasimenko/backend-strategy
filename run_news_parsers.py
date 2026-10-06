@@ -233,7 +233,7 @@ def main() -> None:
         rag_db_url = args.database_url or env_db_url
         if not rag_db_url:
             raise SystemExit("--index-rag требует DATABASE_URL (env или --database-url).")
-        from news_parsers.rag.news_store import index_news_items
+        from news_parsers.rag.vector_backend import index_news_items
 
         print("")
         print("Индексация новостей в RAG-базу (pgvector)…", flush=True)

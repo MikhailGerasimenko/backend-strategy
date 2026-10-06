@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import os
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -657,6 +657,130 @@ def count_attachment_documents(
     return int(row[0] or 0)
 
 
+def upsert_kallanish_catalog_document(
+    database_url: str,
+    *,
+    title: str,
+    brief_date: date,
+    period_end: date | None,
+    indexed_by: str,
+    articles: int,
+    file_path: str = "",
+    content_hash: str = "",
+    created_at: datetime | None = None,
+) -> int | None:
+    """Строка библиотеки для файла Kallanish. Текст брифа берётся из новостей, не отсюда."""
+    name = (title or "").strip()
+    if not name:
+        return None
+    end = period_end or brief_date
+    digest = (content_hash or "").strip()
+    if digest:
+        existing = find_document_by_content_hash(database_url, digest)
+        if existing:
+            return None
+    metadata = {
+        "storage": "news",
+        "catalog_only": True,
+        "articles": int(articles),
+        "filename": name,
+    }
+    with _connect(database_url) as conn:
+        with conn.cursor() as cur:
+            apply_schema_with_cursor(cur)
+            cur.execute(
+                """
+                SELECT id, length(btrim(full_text))
+                FROM brief_index_documents
+                WHERE document_type = 'Kallanish'
+                  AND (
+                    title = %s
+                    OR metadata->>'filename' = %s
+                    OR file_path = %s
+                  )
+                LIMIT 1
+                """,
+                (name, name, file_path or name),
+            )
+            found = cur.fetchone()
+            if found:
+                patch: dict[str, Any] = {"articles": int(articles), "filename": name}
+                if int(found[1] or 0) < 50:
+                    patch["catalog_only"] = True
+                cur.execute(
+                    """
+                    UPDATE brief_index_documents
+                    SET metadata = metadata || %s::jsonb
+                    WHERE id = %s
+                    """,
+                    (Jsonb(patch), int(found[0])),
+                )
+                conn.commit()
+                return None
+            cur.execute(
+                """
+                INSERT INTO brief_index_documents (
+                    brief_date, period_end, brief_kind, source_type, document_type,
+                    title, file_path, full_text, indexed_by, content_hash, metadata, created_at
+                )
+                VALUES (%s, %s, 'full', 'docx_report', 'Kallanish', %s, %s, '', %s, %s, %s, COALESCE(%s, now()))
+                RETURNING id
+                """,
+                (
+                    brief_date,
+                    end,
+                    name,
+                    file_path,
+                    indexed_by or "",
+                    digest,
+                    Jsonb(metadata),
+                    created_at,
+                ),
+            )
+            document_id = int(cur.fetchone()[0])
+        conn.commit()
+    return document_id
+
+
+def backfill_kallanish_catalog(database_url: str) -> int:
+    """Добавляет в библиотеку файлы Kallanish, которые уже лежат статьями в новостях."""
+    with _connect(database_url) as conn:
+        with conn.cursor() as cur:
+            apply_schema_with_cursor(cur)
+            cur.execute(
+                """
+                SELECT keyword_match,
+                       COUNT(*)::int,
+                       MIN(news_date),
+                       MAX(news_date),
+                       MIN(created_at),
+                       (array_agg(indexed_by ORDER BY created_at DESC))[1]
+                FROM rag_news_documents
+                WHERE source = 'Kallanish'
+                  AND btrim(keyword_match) <> ''
+                GROUP BY keyword_match
+                """
+            )
+            groups = cur.fetchall()
+    added = 0
+    for filename, articles, start, end, created_at, indexed_by in groups:
+        name = str(filename or "").strip()
+        if not name or start is None:
+            continue
+        document_id = upsert_kallanish_catalog_document(
+            database_url,
+            title=name,
+            brief_date=start,
+            period_end=end or start,
+            indexed_by=str(indexed_by or ""),
+            articles=int(articles or 0),
+            created_at=created_at,
+        )
+        if document_id:
+            added += 1
+    return added
+
+
 def list_attachment_documents(
     database_url: str,
     *,
@@ -664,6 +788,7 @@ def list_attachment_documents(
     period_end: date | None = None,
 ) -> list[dict[str, Any]]:
     repair_misclassified_attachments(database_url)
+    backfill_kallanish_catalog(database_url)
 
     params: list[Any] = [list(ATTACHMENT_SOURCE_TYPES)]
     where = "d.source_type = ANY(%s)"
@@ -678,7 +803,9 @@ def list_attachment_documents(
                 f"""
                 SELECT d.id, d.brief_date, d.period_end, d.document_type, d.source_type,
                        d.title, d.indexed_by, d.created_at::text, d.file_path,
-                       COALESCE(c.chunk_count, 0)
+                       COALESCE(c.chunk_count, 0),
+                       COALESCE((d.metadata->>'articles')::int, 0),
+                       COALESCE((d.metadata->>'catalog_only')::boolean, false)
                 FROM brief_index_documents d
                 LEFT JOIN (
                     SELECT document_id, COUNT(*) AS chunk_count
@@ -704,6 +831,8 @@ def list_attachment_documents(
             "created_at": str(row[7] or ""),
             "file_path": str(row[8] or ""),
             "chunks": int(row[9] or 0),
+            "articles": int(row[10] or 0),
+            "catalog_only": bool(row[11]),
         }
         for row in rows
     ]
@@ -788,7 +917,7 @@ def delete_attachment_document(
             apply_schema_with_cursor(cur)
             cur.execute(
                 """
-                SELECT id, title, document_type, source_type, file_path
+                SELECT id, title, document_type, source_type, file_path, metadata
                 FROM brief_index_documents
                 WHERE id = %s AND source_type = ANY(%s)
                 """,
@@ -798,6 +927,16 @@ def delete_attachment_document(
             if not row:
                 raise BriefIndexError("Документ не найден или это не PDF/Kallanish.")
             file_path = str(row[4] or "")
+            metadata = row[5] if isinstance(row[5], dict) else {}
+            filename = str(metadata.get("filename") or row[1] or "").strip()
+            if metadata.get("catalog_only") and filename:
+                cur.execute(
+                    """
+                    DELETE FROM rag_news_documents
+                    WHERE source = 'Kallanish' AND keyword_match = %s
+                    """,
+                    (filename,),
+                )
             cur.execute(
                 "DELETE FROM brief_index_documents WHERE id = %s",
                 (document_id,),

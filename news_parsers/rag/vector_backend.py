@@ -484,6 +484,21 @@ def list_index_coverage(
     )
 
 
+def upsert_kallanish_catalog_document(
+    database_url: str | None,
+    **kwargs: Any,
+) -> int | None:
+    """Каталог Kallanish: в Qdrant статьи уже в rag_news — catalog-only опционален."""
+    if uses_qdrant():
+        upsert = getattr(_qd, "upsert_kallanish_catalog_document", None)
+        if upsert is None:
+            return None
+        return upsert(database_url=database_url, **kwargs)
+    if not database_url:
+        raise BriefIndexError("DATABASE_URL не задан.")
+    return _pg_brief.upsert_kallanish_catalog_document(database_url, **kwargs)
+
+
 __all__ = [
     "COLLECTION_BRIEF",
     "COLLECTION_NEWS",
@@ -518,6 +533,7 @@ __all__ = [
     "retrieve_chunks_for_period",
     "search_attachment_chunks",
     "search_news_chunks",
+    "upsert_kallanish_catalog_document",
     "uses_qdrant",
     "vector_backend",
 ]

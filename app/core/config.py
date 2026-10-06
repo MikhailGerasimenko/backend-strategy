@@ -27,7 +27,7 @@ class Settings(BaseSettings):
 
     # OpenRouter / LLM
     openrouter_api_key: str = ""
-    brief_model: str = "google/gemini-2.5-flash"
+    brief_model: str = "google/gemini-3.6-flash"
     embedding_model: str = "openai/text-embedding-3-small"
     embedding_dimensions: int = 1536
 

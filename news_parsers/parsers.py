@@ -356,6 +356,145 @@ def fetch_generic_html(
     return items
 
 
+def _xml_local(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1] if "}" in tag else tag
+
+
+def _xml_child_text(node: ET.Element, *names: str) -> str:
+    wanted = {name.lower() for name in names}
+    chunks: list[str] = []
+    for child in list(node):
+        if _xml_local(child.tag).lower() in wanted:
+            text = compact_text("".join(child.itertext()))
+            if text:
+                chunks.append(text)
+    return compact_text(" ".join(chunks))
+
+
+def _xml_first_text(node: ET.Element, *names: str) -> str:
+    wanted = {name.lower() for name in names}
+    for child in list(node):
+        if _xml_local(child.tag).lower() in wanted:
+            text = compact_text("".join(child.itertext()))
+            if text:
+                return text
+    return ""
+
+
+def _xml_link(node: ET.Element) -> str:
+    direct = _xml_child_text(node, "link", "id")
+    if direct.startswith("http"):
+        return direct
+    for child in list(node):
+        if _xml_local(child.tag).lower() != "link":
+            continue
+        href = compact_text(child.get("href") or "")
+        if href.startswith("http"):
+            rel = compact_text(child.get("rel") or "alternate").lower()
+            if rel in {"", "alternate"}:
+                return href
+            direct = direct or href
+    return direct
+
+
+def _html_to_text(raw: str) -> str:
+    text = compact_text(raw)
+    if not text:
+        return ""
+    if "<" not in text:
+        return text
+    return clean_node_text(soup_from_html(text)) or text
+
+
+def _rss_entry_nodes(root: ET.Element) -> list[ET.Element]:
+    entries = [node for node in root.iter() if _xml_local(node.tag).lower() == "item"]
+    if entries:
+        return entries
+    return [node for node in root.iter() if _xml_local(node.tag).lower() == "entry"]
+
+
+def rss_item_matches(
+    url: str,
+    category: str,
+    *,
+    path_prefixes: tuple[str, ...] = (),
+    exclude_path_fragments: tuple[str, ...] = (),
+    include_categories: tuple[str, ...] = (),
+) -> bool:
+    path = urlparse(url).path.lower()
+    if any(fragment in path for fragment in exclude_path_fragments):
+        return False
+    path_ok = not path_prefixes or any(path.startswith(prefix) for prefix in path_prefixes)
+    if not include_categories:
+        return path_ok
+    lowered = category.lower()
+    category_ok = any(item.lower() == lowered or item.lower() in lowered for item in include_categories)
+    if not path_prefixes:
+        return category_ok
+    return path_ok or category_ok
+
+
+def fetch_rss(source: SourceConfig, client: HttpClient) -> list[NewsItem]:
+    feed_url = compact_text(source.get("rss_url") or source.get("url") or "")
+    if not feed_url:
+        return [error_item(source, "", "parse_changed", "Не задан rss_url/url")]
+
+    result = client.get(
+        feed_url,
+        headers={"Accept": "application/rss+xml, application/atom+xml, application/xml, text/xml, */*"},
+    )
+    if result.blocked:
+        return [blocked_item(source, feed_url, result)]
+    if not result.ok:
+        return [error_item(source, feed_url, "network_error", result.error or str(result.status_code))]
+
+    try:
+        root = ET.fromstring(result.content)
+    except ET.ParseError as exc:
+        return [error_item(source, feed_url, "parse_changed", str(exc))]
+
+    path_prefixes = tuple(source.get("path_prefixes") or ())
+    exclude_path_fragments = tuple(source.get("exclude_path_fragments") or ())
+    include_categories = tuple(source.get("include_categories") or ())
+    max_items = int(source.get("max_items", 80))
+    items: list[NewsItem] = []
+
+    for entry in _rss_entry_nodes(root):
+        title = _xml_first_text(entry, "title")
+        link = _xml_link(entry)
+        if not title or not link:
+            continue
+        category = _xml_child_text(entry, "category", "newsline")
+        if not rss_item_matches(
+            link,
+            category,
+            path_prefixes=path_prefixes,
+            exclude_path_fragments=exclude_path_fragments,
+            include_categories=include_categories,
+        ):
+            continue
+        published = _xml_first_text(entry, "pubDate", "published", "updated", "date", "isoDate")
+        summary = _html_to_text(_xml_first_text(entry, "description", "summary", "anons"))
+        content = _html_to_text(
+            _xml_first_text(entry, "encoded", "content", "full-text")
+        ) or summary
+        items.append(
+            NewsItem(
+                source=source["name"],
+                category=source.get("category", ""),
+                title=title,
+                date=normalize_date(published),
+                url=link,
+                summary=summary,
+                content=content,
+            )
+        )
+        if len(items) >= max_items:
+            break
+
+    return items
+
+
 def fetch_reuters_sitemap(source: SourceConfig, client: HttpClient) -> list[NewsItem]:
     sitemap_url = source.get("sitemap_url", "https://www.reuters.com/arc/outboundfeeds/news-sitemap/?outputType=xml")
     result = client.get(sitemap_url, headers={"Accept": "application/xml,text/xml,*/*"})
@@ -574,6 +713,7 @@ PARSERS: dict[str, ParserFunc] = {
     "yieh": fetch_yieh,
     "mysteel": fetch_mysteel,
     "reuters_sitemap": fetch_reuters_sitemap,
+    "rss": fetch_rss,
     "generic_html": fetch_generic_html,
     "telegram": fetch_telegram,
 }

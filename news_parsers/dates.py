@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from email.utils import parsedate_to_datetime
 from typing import Iterable
@@ -42,8 +43,11 @@ def normalize_date(raw: str, formats: Iterable[str] = DATE_FORMATS) -> str:
     if not text:
         return ""
 
-    if "T" in text and len(text) >= 10:
-        text = text[:10]
+    # Только ISO-8601 с разделителем даты/времени («2026-09-10T13:08:27»),
+    # не любая строка с буквой T (иначе ломается «Thu, 10 Sep 2026 …» из RSS).
+    iso_match = re.match(r"^(\d{4}-\d{2}-\d{2})T", text)
+    if iso_match:
+        text = iso_match.group(1)
 
     ru_normalized = _normalize_ru_month(text)
     if ru_normalized:
@@ -57,8 +61,8 @@ def normalize_date(raw: str, formats: Iterable[str] = DATE_FORMATS) -> str:
 
     try:
         return parsedate_to_datetime(text).strftime("%d.%m.%Y")
-    except (TypeError, ValueError, IndexError, AttributeError):
-        return compact_text(raw)
+    except (TypeError, ValueError, IndexError, AttributeError, OverflowError):
+        return ""
 
 
 def _normalize_ru_month(text: str) -> str:

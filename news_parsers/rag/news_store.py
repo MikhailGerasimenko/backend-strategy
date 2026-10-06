@@ -58,11 +58,18 @@ class NewsSearchHit:
 
 def _parse_news_date(value: str, fallback: date | None) -> date | None:
     raw = (value or "").strip()
-    for fmt in ("%d.%m.%Y", "%Y-%m-%d", "%d.%m.%y"):
-        try:
-            return datetime.strptime(raw, fmt).date()
-        except ValueError:
-            continue
+    if raw:
+        from ..dates import normalize_date
+
+        normalized = normalize_date(raw)
+        for candidate in (normalized, raw):
+            if not candidate:
+                continue
+            for fmt in ("%d.%m.%Y", "%Y-%m-%d", "%d.%m.%y"):
+                try:
+                    return datetime.strptime(candidate, fmt).date()
+                except ValueError:
+                    continue
     return fallback
 
 

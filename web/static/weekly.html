@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Бриф за период — Стратегический навигатор</title>
-  <link rel="stylesheet" href="/static/style.css?v=20260813a" />
+  <link rel="stylesheet" href="/static/style.css?v=20260924a" />
 </head>
 <body class="app-shell" data-page="brief">
   <aside class="app-sidebar" aria-label="Навигация">
@@ -15,11 +15,11 @@
       <p class="sidebar-group-label">Данные</p>
       <a class="sidebar-link" href="#attachmentPanel" data-nav="attachmentPanel">Дополнительные документы в RAG</a>
       <a class="sidebar-link" href="#attachmentLibrary" data-nav="attachmentLibrary">Библиотека документов</a>
-      <a class="sidebar-link" href="/sources">Свои источники</a>
+      <a class="sidebar-link" href="/sources">Источники</a>
 
       <p class="sidebar-group-label">Бриф</p>
       <a class="sidebar-link" href="#sourcesPanel" data-nav="sourcesPanel">Источники</a>
-      <a class="sidebar-link" href="#promptPanel" data-nav="promptPanel">Системный промпт</a>
+      <a class="sidebar-link" href="#promptPanel" data-nav="promptPanel">Промпты брифа</a>
       <a class="sidebar-link active" href="#periodPanel" data-nav="periodPanel">Бриф за период</a>
 
       <p class="sidebar-group-label">Разделы</p>
@@ -48,7 +48,8 @@
         <h2>Дополнительные документы в RAG</h2>
         <p class="help">
           Прикрепите PDF, Word или TXT — можно выбрать несколько файлов сразу.
-          Тип определяется по имени: PMI, Kallanish (в т.ч. massmail `.txt`), иначе PDF отчёт / Kallanish.
+          Тип определяется по имени: PMI, Kallanish (статьи → новости RAG; .txt котировки тоже),
+          иначе PDF отчёт.
         </p>
         <div class="row attachment-form">
           <label for="pdfDate">Дата (начало)</label>
@@ -87,9 +88,8 @@
         </button>
         <div class="collapsible-body" id="attachmentLibraryBody">
           <p class="help">
-            PDF, Kallanish и PMI в RAG. Все файлы за период брифа («С» / «По»)
-            участвуют в генерации, если их тип включён в источниках
-            (Kallanish / PDF отчёт / PMI). Включение и отключение — только там.
+            PDF, PMI и файлы Kallanish. Word-выпуск Kallanish — это статьи.
+            Файл .txt рядом с ним — таблица котировок, не одна новость.
           </p>
           <div class="attachment-library-toolbar">
             <label class="attachment-filter-toggle">
@@ -109,7 +109,7 @@
                   <th>Тип</th>
                   <th>Название</th>
                   <th>Период</th>
-                  <th>Чанков</th>
+                  <th>Объём</th>
                   <th>Загрузил</th>
                   <th>Дата</th>
                   <th></th>
@@ -151,11 +151,11 @@
           (лист health, колонка «Категория»): Металлургия РФ / мира, Китай,
           Макроэкономика РФ / мира. На чипе — тип брифа (новостной / рыночный / все типы).
           Справа от названия категории — кнопка <strong>Все</strong> / <strong>Снять</strong>
-          для выбора всей группы. В группе «Документы RAG»: <strong>Kallanish</strong>,
-          <strong>PDF отчёт</strong>, <strong>PMI</strong>. При выборе шаблона брифа
-          отмечаются подходящие источники. Цифра — сколько новостей или документов
-          за период есть в RAG. Свои Telegram-каналы — в разделе
-          <a href="/sources">Свои источники</a>.
+          для выбора всей группы. В группе «Документы RAG»: <strong>PDF отчёт</strong>,
+          <strong>PMI</strong>. <strong>Kallanish</strong> загружается как набор новостей
+          (статья + дата) и выбирается вместе с остальными источниками.
+          Цифра — сколько новостей или документов за период есть в RAG.
+          Управление источниками — в разделе <a href="/sources">Источники</a>.
         </p>
         <div class="source-toolbar">
           <button type="button" class="btn secondary btn-sm" id="btnSelectBriefSources">По типу брифа</button>
@@ -167,8 +167,11 @@
       </section>
 
       <section class="card" id="promptPanel">
-        <h2>3. Системный промпт</h2>
-        <p class="help">Шаблоны брифа. Смена типа меняет только промпт и набор источников — период (С/По) не трогается.</p>
+        <h2>3. Промпты брифа</h2>
+        <p class="help">
+          Шаблоны брифа. Смена типа подставляет обе части. Источники пользователь выбирает сам.
+          При генерации обе половины склеиваются в один промпт.
+        </p>
         <div class="row actions-top prompt-variant-row">
           <button type="button" class="btn secondary" id="btnLoadFull">Полный бриф</button>
           <button type="button" class="btn secondary" id="btnLoadMarket">Рыночный бриф</button>
@@ -177,7 +180,60 @@
           <button type="button" class="btn secondary" id="btnLoadMonthlyMarket">Ежемесячный рыночный бриф</button>
         </div>
         <p class="help prompt-kind-hint" id="promptKindHint">Тип брифа: полный</p>
-        <textarea id="systemPrompt" rows="16" placeholder="Системный промпт…"></textarea>
+
+        <label for="systemPrompt"><strong>Системный промпт</strong></label>
+        <p class="help">Роль, стиль, критические требования — всё до блока «ОБЯЗАТЕЛЬНАЯ СТРУКТУРА».</p>
+        <textarea id="systemPrompt" rows="12" placeholder="Системный промпт…"></textarea>
+
+        <label for="userPrompt"><strong>Пользовательский промпт</strong></label>
+        <p class="help">
+          Обязательная структура отчёта — нижнее поле. Граница ищется по заголовку
+          («ОБЯЗАТЕЛЬНАЯ СТРУКТУРА», «Структура отчета», ##-заголовок или нумерации
+          «0./1. …»). При сохранении «мой дефолт» две части хранятся раздельно,
+          поэтому кастомные промпты не слетают после перезагрузки.
+        </p>
+        <textarea id="userPrompt" rows="14" placeholder="ОБЯЗАТЕЛЬНАЯ СТРУКТУРА…"></textarea>
+
+        <div class="btn-row">
+          <button type="button" class="btn secondary btn-sm" id="btnSavePromptDefault">Сделать моим дефолтом</button>
+          <button type="button" class="btn secondary btn-sm" id="btnResetPromptDefault">Сбросить мой дефолт</button>
+          <span class="hint" id="promptDefaultHint"></span>
+        </div>
+
+        <details class="prompt-advanced" id="mapPromptDetails">
+          <summary><strong>Промпт фактографа (map-этап)</strong></summary>
+          <p class="help">
+            Этим промптом модель обрабатывает каждый батч новостей и собирает фактографический дайджест
+            (даты, цифры, компании, ссылки на источники). Затем дайджесты идут в основной промпт брифа.
+            Промпт общий для всех типов брифа и сохраняется отдельно на вашего пользователя
+            (кнопка ниже, автосохранение при уходе из поля и при запуске брифа).
+            Обязательно сохраняйте формат ссылок «[n]» — иначе список источников в конце брифа не соберётся.
+          </p>
+          <textarea id="mapPrompt" rows="14" placeholder="Промпт фактографа…"></textarea>
+          <div class="btn-row">
+            <button type="button" class="btn secondary btn-sm" id="btnSaveMapPromptDefault">Сделать моим дефолтом</button>
+            <button type="button" class="btn secondary btn-sm" id="btnResetMapPromptDefault">Сбросить мой дефолт</button>
+            <span class="hint" id="mapPromptHint"></span>
+          </div>
+        </details>
+
+        <details class="prompt-advanced" id="reducePromptDetails">
+          <summary><strong>Промпт склейки (reduce-этап)</strong></summary>
+          <p class="help">
+            Инструкции, с которыми модель собирает дайджесты всех батчей в ОДИН итоговый бриф.
+            Структура и тон берутся из промптов брифа выше — здесь только правила склейки
+            (дедупликация, перенос цифр в разделы, запрет выдумывать). Период, тип брифа,
+            правила по ссылкам «[n]» и сами дайджесты система добавляет автоматически.
+            Промпт общий для всех типов брифа и сохраняется на вашего пользователя
+            (кнопка ниже, автосохранение при уходе из поля и при запуске брифа).
+          </p>
+          <textarea id="reducePrompt" rows="10" placeholder="Инструкции reduce-этапа…"></textarea>
+          <div class="btn-row">
+            <button type="button" class="btn secondary btn-sm" id="btnSaveReducePromptDefault">Сделать моим дефолтом</button>
+            <button type="button" class="btn secondary btn-sm" id="btnResetReducePromptDefault">Сбросить мой дефолт</button>
+            <span class="hint" id="reducePromptHint"></span>
+          </div>
+        </details>
       </section>
 
       <section class="card" id="modelPanel">
@@ -205,13 +261,44 @@
         <pre class="log" id="jobLog"></pre>
       </section>
 
+      <section class="card" id="mapDigestsCard" hidden>
+        <details class="prompt-advanced" id="mapDigestsDetails">
+          <summary>Результаты map-этапа по батчам (<span id="mapDigestsCount">0</span>)</summary>
+          <p class="help">
+            Что фактограф вывел по каждому батчу материалов до сборки финального брифа.
+            Выберите батч, чтобы прочитать его дайджест.
+          </p>
+          <div class="map-digest-toolbar">
+            <label for="mapDigestSelect"><strong>Батч</strong></label>
+            <select id="mapDigestSelect" class="map-digest-select"></select>
+            <button type="button" class="btn secondary btn-sm" id="btnMapDigestPrev" title="Предыдущий батч">←</button>
+            <button type="button" class="btn secondary btn-sm" id="btnMapDigestNext" title="Следующий батч">→</button>
+            <button type="button" class="btn secondary btn-sm" id="btnMapDigestCopy">Скопировать</button>
+            <button type="button" class="btn secondary btn-sm" id="btnMapDigestsDocx">Скачать все батчи Word</button>
+            <span class="hint" id="mapDigestMeta"></span>
+          </div>
+          <pre class="map-digest-body" id="mapDigestBody">—</pre>
+        </details>
+      </section>
+
       <section class="card" id="briefEditorCard" hidden>
         <h2>6. Редактирование брифа</h2>
         <p class="help" id="briefEditorHelp">
           Проверьте и поправьте текст. Затем нажмите «Скачать Word» — файл соберётся уже с вашими правками.
         </p>
+        <label for="cleanupPrompt"><strong>Промпт для LLM clean-up</strong></label>
+        <p class="help">
+          Этот промпт используется только когда вы нажимаете <strong>LLM clean-up</strong> в предпросмотре.
+        </p>
+        <textarea id="cleanupPrompt" rows="10" placeholder="Промпт для clean-up…"></textarea>
+        <div class="btn-row">
+          <button type="button" class="btn secondary btn-sm" id="btnSaveCleanupPromptDefault">Сделать моим дефолтом</button>
+          <button type="button" class="btn secondary btn-sm" id="btnResetCleanupPromptDefault">Сбросить мой дефолт</button>
+          <span class="hint" id="cleanupPromptHint"></span>
+        </div>
         <textarea id="briefEditor" rows="22" placeholder="Текст брифа появится после генерации…"></textarea>
         <div class="brief-editor-actions">
+          <button type="button" class="btn secondary" id="btnCleanupBrief">LLM clean-up</button>
           <button type="button" class="btn primary" id="btnExportDocx">Скачать Word</button>
           <button type="button" class="btn secondary" id="btnExportJson" hidden>Скачать JSON</button>
           <span class="hint" id="briefExportHint"></span>
@@ -220,6 +307,6 @@
     </main>
   </div>
 
-  <script src="/static/weekly.js?v=20260814b"></script>
+  <script src="/static/weekly.js?v=20261006a"></script>
 </body>
 </html>

@@ -331,9 +331,10 @@ async function ask(question) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      thinking.innerHTML = `<span class="err-text">${escapeHtml(data.detail || "Ошибка запроса")}</span>`;
+      const detail = data.detail || `Ошибка запроса (HTTP ${res.status})`;
+      thinking.innerHTML = `<span class="err-text">${escapeHtml(detail)}</span>`;
       return;
     }
     let html = renderAnswer(data.answer || "");

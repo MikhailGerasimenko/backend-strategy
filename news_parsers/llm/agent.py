@@ -10,11 +10,12 @@ from html import unescape
 import json
 import re
 from collections import defaultdict
+from dataclasses import dataclass, replace
 from datetime import date
-from functools import lru_cache
 from pathlib import Path
 from typing import Any, Sequence
 
+from ..rag.store import _join_chunk_texts
 from ..rag.vector_backend import (
     AttachmentSearchHit,
     NewsSearchHit,
@@ -32,8 +33,15 @@ _CHANNELS_FILE = Path(__file__).resolve().parents[2] / "telegram_channels.json"
 _DATE_RE = re.compile(
     r"\b(\d{1,2})[./](\d{1,2})[./](\d{2,4})\b|\b(\d{4})-(\d{1,2})-(\d{1,2})\b"
 )
-_TG_SOURCE_RE = re.compile(r"(?:TG|tg|@)\s*([A-Za-z0-9_]+)")
+# «TG»/«@» только как отдельный токен: иначе «mortgage» давал бы фильтр по источнику «age».
+_TG_SOURCE_RE = re.compile(r"(?<![A-Za-z0-9_])(?:TG|tg|@)\s*([A-Za-z0-9_]{3,})")
 _CITE_RE = re.compile(r"\[(\d{1,3})\]")
+
+# Бюджет контекста для одного запроса к модели (символы). Без него агент
+# подтягивал ВСЕ чанки 12 документов Kallanish — сотни тысяч символов.
+_MAX_CONTEXT_CHARS = 160_000
+_MAX_DOC_CHARS = 40_000
+_MAX_HISTORY_ITEM_CHARS = 1_500
 _ATTACHMENT_MARKERS = ("kallanish", "pdf", "отчёт", "отчет", "документ", "word")
 
 AGENT_SYSTEM_PROMPT = (
@@ -102,6 +110,13 @@ def wants_full_text(message: str) -> int | None:
     return None
 
 
+def _safe_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _chunk_index_from_source(src: dict[str, Any]) -> int | None:
     value = src.get("chunk_index")
     if value is None or value == "":
@@ -138,64 +153,156 @@ def format_document_text_for_display(text: str) -> str:
     return compact
 
 
-def _format_hits(hits: list[NewsSearchHit]) -> str:
-    lines: list[str] = []
-    for index, hit in enumerate(hits, start=1):
-        lines.append(
-            f"[{index}] ({hit.news_date.isoformat()}, источник: {hit.source or '—'}) "
-            f"{hit.title}\n{hit.content}"
+@dataclass
+class _DocContext:
+    """Один документ = одна ссылка [n] в контексте и в списке источников."""
+
+    kind: str  # news | attachment
+    document_id: int
+    title: str
+    source: str
+    doc_date: date
+    url: str
+    score: float
+    text: str
+    anchor_chunk: int | None = None
+    ref: int = 0
+
+    def header(self) -> str:
+        label = "источник" if self.kind == "news" else "документ"
+        return f"[{self.ref}] ({self.doc_date.isoformat()}, {label}: {self.source or '—'}) {self.title}"
+
+    def to_source(self) -> dict[str, Any]:
+        item: dict[str, Any] = {
+            "ref": self.ref,
+            "kind": self.kind,
+            "document_id": self.document_id,
+            "title": self.title,
+            "url": self.url,
+            "source": self.source,
+            "news_date": self.doc_date.isoformat(),
+            "score": round(float(self.score), 3),
+        }
+        if self.kind == "attachment":
+            item["chunk_index"] = self.anchor_chunk
+        return item
+
+
+def _clip(text: str, limit: int) -> str:
+    compact = (text or "").strip()
+    if len(compact) <= limit:
+        return compact
+    return compact[: limit - 1].rstrip() + "…"
+
+
+def _section_around(
+    chunks: dict[int, str], anchor: int | None, *, radius: int, limit: int
+) -> str:
+    """Фрагмент документа вокруг найденного чанка — когда весь документ не влезает."""
+    if not chunks:
+        return ""
+    ordered = sorted(chunks)
+    if anchor is None or anchor not in chunks:
+        selected = ordered[: radius + 2]
+    else:
+        selected = [i for i in ordered if anchor - radius <= i <= anchor + radius]
+    return _clip(_join_chunk_texts([chunks[i] for i in selected]), limit)
+
+
+def _group_news_docs(
+    seed: list[NewsSearchHit], all_chunks: list[NewsSearchHit]
+) -> list[_DocContext]:
+    """Документы в порядке лучшего score сида; текст — все чанки, склеенные без дублей."""
+    chunks_by_doc: dict[int, dict[int, str]] = defaultdict(dict)
+    for hit in all_chunks:
+        chunks_by_doc[hit.document_id][hit.chunk_index] = hit.content
+    best_seed: dict[int, NewsSearchHit] = {}
+    for hit in seed:
+        prev = best_seed.get(hit.document_id)
+        if prev is None or hit.score > prev.score:
+            best_seed[hit.document_id] = hit
+    docs: list[_DocContext] = []
+    for doc_id in _ranked_document_ids(seed):
+        hit = best_seed[doc_id]
+        chunks = chunks_by_doc.get(doc_id) or {hit.chunk_index: hit.content}
+        text = _join_chunk_texts([chunks[i] for i in sorted(chunks)])
+        if len(text) > _MAX_DOC_CHARS:
+            text = _section_around(chunks, hit.chunk_index, radius=6, limit=_MAX_DOC_CHARS)
+        docs.append(
+            _DocContext(
+                kind="news",
+                document_id=doc_id,
+                title=hit.title,
+                source=hit.source,
+                doc_date=hit.news_date,
+                url=hit.url,
+                score=hit.score,
+                text=text,
+                anchor_chunk=hit.chunk_index,
+            )
         )
-    return "\n\n".join(lines)
+    return docs
 
 
-def _format_attachment_hits(hits: list[AttachmentSearchHit], *, start_index: int) -> str:
-    lines: list[str] = []
-    for offset, hit in enumerate(hits):
-        index = start_index + offset
-        lines.append(
-            f"[{index}] ({hit.brief_date.isoformat()}, документ: {hit.document_type or '—'}) "
-            f"{hit.title}\n{hit.content}"
+def _group_attachment_docs(
+    seed: list[AttachmentSearchHit], all_chunks: list[AttachmentSearchHit]
+) -> list[_DocContext]:
+    chunks_by_doc: dict[int, dict[int, str]] = defaultdict(dict)
+    for hit in all_chunks:
+        chunks_by_doc[hit.document_id][hit.chunk_index] = hit.content
+    best_seed: dict[int, AttachmentSearchHit] = {}
+    for hit in seed:
+        prev = best_seed.get(hit.document_id)
+        if prev is None or hit.score > prev.score:
+            best_seed[hit.document_id] = hit
+    docs: list[_DocContext] = []
+    for doc_id in _ranked_document_ids(seed):
+        hit = best_seed[doc_id]
+        chunks = chunks_by_doc.get(doc_id) or {hit.chunk_index: hit.content}
+        text = _join_chunk_texts([chunks[i] for i in sorted(chunks)])
+        if len(text) > _MAX_DOC_CHARS:
+            # Многостраничный Kallanish/PDF: берём окрестность найденного места.
+            text = _section_around(chunks, hit.chunk_index, radius=6, limit=_MAX_DOC_CHARS)
+        docs.append(
+            _DocContext(
+                kind="attachment",
+                document_id=doc_id,
+                title=hit.title,
+                source=hit.document_type,
+                doc_date=hit.brief_date,
+                url="",
+                score=hit.score,
+                text=text,
+                anchor_chunk=hit.chunk_index,
+            )
         )
-    return "\n\n".join(lines)
+    return docs
 
 
-def _hits_to_sources(hits: list[NewsSearchHit]) -> list[dict[str, Any]]:
-    sources: list[dict[str, Any]] = []
-    for index, hit in enumerate(hits, start=1):
-        sources.append(
-            {
-                "ref": index,
-                "kind": "news",
-                "document_id": hit.document_id,
-                "title": hit.title,
-                "url": hit.url,
-                "source": hit.source,
-                "news_date": hit.news_date.isoformat(),
-                "score": round(hit.score, 3),
-            }
-        )
-    return sources
+def _fit_context_budget(
+    docs: list[_DocContext], *, budget: int = _MAX_CONTEXT_CHARS
+) -> list[_DocContext]:
+    """Укладывает документы в бюджет символов: сначала по рангу целиком,
+    последний ужимается до остатка, дальше — отбрасываются."""
+    fitted: list[_DocContext] = []
+    used = 0
+    for doc in docs:
+        remaining = budget - used
+        if remaining < 2_000:
+            break
+        if len(doc.text) > remaining:
+            doc = replace(doc, text=_clip(doc.text, remaining))
+        fitted.append(doc)
+        used += len(doc.text)
+    return fitted
 
 
-def _attachment_hits_to_sources(
-    hits: list[AttachmentSearchHit], *, start_index: int
-) -> list[dict[str, Any]]:
-    sources: list[dict[str, Any]] = []
-    for offset, hit in enumerate(hits):
-        sources.append(
-            {
-                "ref": start_index + offset,
-                "kind": "attachment",
-                "document_id": hit.document_id,
-                "chunk_index": hit.chunk_index,
-                "title": hit.title,
-                "url": "",
-                "source": hit.document_type,
-                "news_date": hit.brief_date.isoformat(),
-                "score": round(hit.score, 3),
-            }
-        )
-    return sources
+def _assign_refs(docs: list[_DocContext], *, start: int = 1) -> list[_DocContext]:
+    return [replace(doc, ref=start + offset) for offset, doc in enumerate(docs)]
+
+
+def _format_docs(docs: list[_DocContext]) -> str:
+    return "\n\n".join(f"{doc.header()}\n{doc.text}" for doc in docs if doc.text)
 
 
 def _ranked_document_ids(hits: Sequence[Any], *, id_attr: str = "document_id") -> list[int]:
@@ -301,7 +408,7 @@ def _extract_source_filter(question: str) -> str | None:
     text = question or ""
     low = text.lower()
     if "kallanish" in low:
-        return None
+        return "Kallanish"
     tg_match = _TG_SOURCE_RE.search(text)
     if tg_match:
         return tg_match.group(1)
@@ -370,6 +477,16 @@ def _diversify_hits(
                     break
         if not added:
             break
+    if len(result) < top_k:
+        # Лимит «≤2 на источник» не должен резать выдачу, если релевантных
+        # источников мало (например, всё по теме — только Kallanish).
+        chosen = {(h.document_id, h.chunk_index) for h in result}
+        for hit in hits:
+            if len(result) >= top_k:
+                break
+            if (hit.document_id, hit.chunk_index) not in chosen:
+                result.append(hit)
+                chosen.add((hit.document_id, hit.chunk_index))
     return result
 
 
@@ -430,7 +547,7 @@ def _format_chat_history(history: list[dict[str, Any]] | None) -> str:
         if not content:
             continue
         label = "Пользователь" if role == "user" else "Ассистент"
-        lines.append(f"{label}: {content}")
+        lines.append(f"{label}: {_clip(content, _MAX_HISTORY_ITEM_CHARS)}")
     return "\n".join(lines)
 
 
@@ -443,79 +560,91 @@ def _truncate_doc_text(text: str) -> str:
 
 def _load_prior_sources_context(
     database_url: str, prior_sources: list[dict[str, Any]]
-) -> tuple[str, list[dict[str, Any]]]:
-    """Читаемые фрагменты документов из прошлого ответа — для уточняющих вопросов."""
-    parts: list[str] = []
-    sources: list[dict[str, Any]] = []
+) -> list[_DocContext]:
+    """Документы из прошлого ответа (с их же номерами [n]) — для уточняющих вопросов."""
+    docs: list[_DocContext] = []
+    seen: set[tuple[str, int]] = set()
     for index, src in enumerate(prior_sources, start=1):
         kind = str(src.get("kind") or "news")
-        document_id = int(src.get("document_id", 0))
-        if not document_id:
+        try:
+            document_id = int(src.get("document_id") or 0)
+        except (TypeError, ValueError):
             continue
-        orig_ref = int(src.get("ref") or index)
+        if not document_id or (kind, document_id) in seen:
+            continue
+        seen.add((kind, document_id))
+        try:
+            orig_ref = int(src.get("ref") or index)
+        except (TypeError, ValueError):
+            orig_ref = index
+        try:
+            score = float(src.get("score") or 1.0)
+        except (TypeError, ValueError):
+            score = 1.0
         if kind == "attachment":
+            anchor = _chunk_index_from_source(src)
             doc, section = get_attachment_section(
                 database_url,
                 document_id,
-                _chunk_index_from_source(src),
+                anchor,
                 radius=3,
                 max_chars=_MAX_FOLLOW_UP_DOC_CHARS,
             )
             if not doc:
                 continue
-            text = format_document_text_for_display(_truncate_doc_text(section))
-            parts.append(
-                f"[{orig_ref}] ({doc.brief_date.isoformat()}, документ: {doc.document_type}) "
-                f"{doc.title}\n{text}"
-            )
-            sources.append(
-                {
-                    "ref": orig_ref,
-                    "kind": "attachment",
-                    "document_id": doc.id,
-                    "chunk_index": src.get("chunk_index"),
-                    "title": doc.title,
-                    "url": "",
-                    "source": doc.document_type,
-                    "news_date": doc.brief_date.isoformat(),
-                    "score": src.get("score", 1.0),
-                }
+            docs.append(
+                _DocContext(
+                    kind="attachment",
+                    document_id=doc.id,
+                    title=doc.title,
+                    source=doc.document_type,
+                    doc_date=doc.brief_date,
+                    url="",
+                    score=score,
+                    text=format_document_text_for_display(_truncate_doc_text(section)),
+                    anchor_chunk=anchor,
+                    ref=orig_ref,
+                )
             )
             continue
         doc = get_news_document(database_url, document_id)
         if not doc:
             continue
-        text = _truncate_doc_text(doc.full_text)
-        parts.append(
-            f"[{orig_ref}] ({doc.news_date.isoformat()}, источник: {doc.source or '—'}) "
-            f"{doc.title}\n{text}"
+        docs.append(
+            _DocContext(
+                kind="news",
+                document_id=doc.id,
+                title=doc.title,
+                source=doc.source,
+                doc_date=doc.news_date,
+                url=doc.url,
+                score=score,
+                text=_truncate_doc_text(doc.full_text),
+                ref=orig_ref,
+            )
         )
-        sources.append(
-            {
-                "ref": orig_ref,
-                "kind": "news",
-                "document_id": doc.id,
-                "title": doc.title,
-                "url": doc.url,
-                "source": doc.source,
-                "news_date": doc.news_date.isoformat(),
-                "score": src.get("score", 1.0),
-            }
-        )
-    return "\n\n".join(parts), sources
+    return docs
 
 
 def _compose_search_query(
     question: str,
     history: list[dict[str, Any]] | None,
 ) -> str:
+    """Подмешивает прошлый вопрос в поисковый запрос только для уточнений.
+
+    Раньше это делалось всегда — новый вопрос на другую тему искался вместе
+    со старым, и embeddings тянули нерелевантные документы.
+    """
     if not history:
+        return question
+    words = [w for w in re.split(r"\s+", (question or "").strip()) if w]
+    if not (_is_follow_up_question(question) or len(words) <= 3):
         return question
     for item in reversed(history):
         if str(item.get("role", "")) == "user":
             prev = str(item.get("content", "")).strip()
             if prev and prev.lower() != question.lower().strip():
-                return f"{prev}\n{question}"
+                return f"{_clip(prev, 400)}\n{question}"
             break
     return question
 
@@ -558,14 +687,30 @@ def answer_question(
     """
     effective_system, use_rag = resolve_agent_runtime(system_prompt)
     ref = wants_full_text(question)
-    if use_rag and _asks_full_text(question) and prior_sources:
+    # «Полностью согласен, а что по ценам в Китае?» — не запрос полного текста:
+    # без номера считаем таковым только короткую реплику.
+    full_text_request = _asks_full_text(question) and (
+        ref is not None or len((question or "").strip()) <= 80
+    )
+    if use_rag and full_text_request and prior_sources:
         match = next(
-            (s for s in prior_sources if ref is not None and int(s.get("ref", 0)) == ref),
+            (s for s in prior_sources if ref is not None and _safe_int(s.get("ref")) == ref),
             None,
         )
+        if match is None and ref is not None:
+            available = ", ".join(
+                f"[{_safe_int(s.get('ref'))}]" for s in prior_sources if _safe_int(s.get("ref"))
+            )
+            return {
+                "answer": (
+                    f"В предыдущем ответе нет источника [{ref}]. "
+                    f"Доступны: {available or '—'}. Укажите номер из этого списка."
+                ),
+                "sources": prior_sources,
+            }
         if match is None:
             match = prior_sources[0]
-            ref = int(match.get("ref", 1) or 1)
+            ref = _safe_int(match.get("ref")) or 1
         if match:
             kind = str(match.get("kind") or "news")
             if kind == "attachment":
@@ -631,29 +776,12 @@ def answer_question(
         )
         return {"answer": answer.strip(), "sources": []}
 
+    prior_docs: list[_DocContext] = []
     if follow_up and prior_sources:
-        context, all_sources = _load_prior_sources_context(database_url, prior_sources)
-        if not context:
-            follow_up = False
-        else:
-            user_prompt = (
-                (f"Предыдущий диалог:\n{history_block}\n\n" if history_block else "")
-                + f"Новый вопрос пользователя: {question}\n\n"
-                "Пользователь уточняет предыдущий ответ. Ниже — материалы из базы "
-                "(те же источники). Используй их для фактов со ссылками [n]; "
-                "если нужно — дополни общими знаниями, явно разделяя источники.\n\n"
-                f"Материалы из базы:\n{context}\n\n"
-                "Дай развёрнутый ответ."
-            )
-            answer = chat_completion(
-                system_prompt=effective_system,
-                user_prompt=user_prompt,
-                model=model or BRIEF_MODEL,
-                temperature=0.2,
-            )
-            sources = _sources_cited_in_answer(all_sources, answer.strip())
-            return {"answer": answer.strip(), "sources": sources}
+        prior_docs = _load_prior_sources_context(database_url, prior_sources)
 
+    # Свежий поиск делаем всегда — и для уточняющего вопроса тоже: раньше
+    # follow-up отвечал только по старым источникам, даже если тема сменилась.
     search_query = _expand_search_query(_compose_search_query(question, history))
     search_start, search_end = _resolve_search_period(question, period_start, period_end)
     source_filter = _extract_source_filter(question)
@@ -661,7 +789,8 @@ def answer_question(
     attachment_focused = _is_attachment_focused_query(question) or bool(document_type_filter)
     narrow = _is_narrow_source_query(question, source_filter)
     diverse = not narrow and not source_filter and not attachment_focused
-    # Семантика только находит релевантные ДОКУМЕНТЫ; дальше подтягиваем ВСЕ их чанки.
+    # Семантика только находит релевантные ДОКУМЕНТЫ; дальше подтягиваем их чанки
+    # (в пределах бюджета контекста).
     news_seed_k = (
         4
         if attachment_focused and not source_filter
@@ -680,7 +809,9 @@ def answer_question(
         candidate_limit=candidate_limit,
     )
     news_seed = _prepare_hits(news_seed, top_k=news_seed_k, diverse=diverse)
-    news_hits = _expand_news_hits_to_all_chunks(database_url, news_seed)
+    news_docs = _group_news_docs(
+        news_seed, _expand_news_hits_to_all_chunks(database_url, news_seed)
+    )
 
     attachment_seed = search_attachment_chunks(
         database_url,
@@ -691,9 +822,31 @@ def answer_question(
         top_k=attachment_seed_k,
         candidate_limit=attachment_seed_k * 4,
     )
-    attachment_hits = _expand_attachment_hits_to_all_chunks(database_url, attachment_seed)
+    attachment_docs = _group_attachment_docs(
+        attachment_seed, _expand_attachment_hits_to_all_chunks(database_url, attachment_seed)
+    )
 
-    if not news_hits and not attachment_hits:
+    # Один документ — одна ссылка [n]. Источники прошлого ответа сохраняют свои
+    # номера, новые документы нумеруются дальше.
+    known = {(d.kind, d.document_id) for d in prior_docs}
+    fresh: list[_DocContext] = []
+    for doc in news_docs + attachment_docs:
+        key = (doc.kind, doc.document_id)
+        if key in known:
+            continue
+        known.add(key)
+        fresh.append(doc)
+    fresh.sort(key=lambda d: -d.score)
+
+    prior_docs = _fit_context_budget(prior_docs, budget=_MAX_CONTEXT_CHARS // 2)
+    fresh = _fit_context_budget(
+        fresh, budget=_MAX_CONTEXT_CHARS - sum(len(d.text) for d in prior_docs)
+    )
+    next_ref = max([d.ref for d in prior_docs], default=0) + 1
+    fresh = _assign_refs(fresh, start=next_ref)
+    docs = prior_docs + fresh
+
+    if not docs:
         # Нет хитов в RAG — обычный ответ нейросети без принудительного «в базе пусто».
         user_prompt = (
             (f"Предыдущий диалог:\n{history_block}\n\n" if history_block else "")
@@ -713,34 +866,34 @@ def answer_question(
         )
         return {"answer": answer.strip(), "sources": []}
 
-    context_parts: list[str] = []
-    all_sources: list[dict[str, Any]] = []
-    next_ref = 1
-    if news_hits:
-        context_parts.append(_format_hits(news_hits))
-        all_sources.extend(_hits_to_sources(news_hits))
-        next_ref = len(news_hits) + 1
-    if attachment_hits:
-        if context_parts:
-            context_parts.append("")
-        context_parts.append(_format_attachment_hits(attachment_hits, start_index=next_ref))
-        all_sources.extend(
-            _attachment_hits_to_sources(attachment_hits, start_index=next_ref)
+    context = _format_docs(docs)
+    all_sources = [doc.to_source() for doc in docs]
+    if prior_docs:
+        task = (
+            "Пользователь уточняет предыдущий ответ. Ниже — материалы из базы: "
+            "источники прошлого ответа (с прежними номерами) и новые находки по теме. "
+            "Используй их для фактов со ссылками [n]; если нужно — дополни общими "
+            "знаниями, явно разделяя источники. Дай развёрнутый ответ."
         )
-
-    context = "\n\n".join(part for part in context_parts if part)
+        label = "Новый вопрос пользователя"
+        temperature = 0.2
+    else:
+        task = (
+            "Ответь на вопрос. Факты из базы сопровождай ссылками [n]. "
+            "Можешь дополнять общими знаниями, но не приписывай базе то, чего нет во фрагментах."
+        )
+        label = "Вопрос пользователя"
+        temperature = 0.25
     user_prompt = (
         (f"Предыдущий диалог:\n{history_block}\n\n" if history_block else "")
-        + f"Вопрос пользователя: {question}\n\n"
-        f"Фрагменты из внутренней базы (новости и документы):\n{context}\n\n"
-        "Ответь на вопрос. Факты из базы сопровождай ссылками [n]. "
-        "Можешь дополнять общими знаниями, но не приписывай базе то, чего нет во фрагментах."
+        + f"{label}: {question}\n\n"
+        f"Материалы из внутренней базы (новости и документы):\n{context}\n\n"
+        f"{task}"
     )
     answer = chat_completion(
         system_prompt=effective_system,
         user_prompt=user_prompt,
         model=model or BRIEF_MODEL,
-        temperature=0.25,
-    )
-    sources = _sources_cited_in_answer(all_sources, answer.strip())
-    return {"answer": answer.strip(), "sources": sources}
+        temperature=temperature,
+    ).strip()
+    return {"answer": answer, "sources": _sources_cited_in_answer(all_sources, answer)}

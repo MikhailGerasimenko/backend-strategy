@@ -248,6 +248,12 @@ def add_custom_channel(
         channels.append(row)
         payload["channels"] = channels
         _write_payload(target, payload)
+    try:
+        from .disabled_sources import clear_disabled
+
+        clear_disabled(source_name_for_channel(channel))
+    except Exception:
+        pass
     return {
         **row,
         "name": source_name_for_channel(channel),
@@ -279,11 +285,12 @@ def remove_custom_channel(channel: str, *, path: Path | None = None) -> dict[str
             raise ValueError(f"Канал @{username} не найден среди добавленных.")
         payload["channels"] = kept
         _write_payload(target, payload)
-    return {
+    result = {
         "channel": username,
         "name": source_name_for_channel(username),
         **{k: v for k, v in (removed or {}).items() if k != "channel"},
     }
+    return result
 
 
 def expand_custom_telegram_sources(

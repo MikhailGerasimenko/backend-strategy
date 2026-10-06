@@ -879,6 +879,60 @@ textarea {
   color: var(--muted);
 }
 
+.prompt-advanced {
+  margin-top: 1.1rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--border, #e3e6ea);
+}
+
+.prompt-advanced > summary {
+  cursor: pointer;
+  list-style: revert;
+  margin-bottom: 0.4rem;
+}
+
+#mapDigestsCard .prompt-advanced {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+#mapDigestsCard .prompt-advanced > summary {
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.map-digest-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.6rem 0;
+}
+
+.map-digest-select {
+  min-width: 220px;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border, #d7dbe0);
+  border-radius: 6px;
+  font: inherit;
+  background: #fff;
+}
+
+.map-digest-body {
+  background: #f7f9fb;
+  border: 1px solid var(--border, #e3e6ea);
+  border-radius: 8px;
+  padding: 1rem;
+  font-size: 0.85rem;
+  line-height: 1.45;
+  max-height: 520px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+}
+
 .generate-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1548,4 +1602,22 @@ textarea {
   padding: 0.05rem 0.3rem;
   border-radius: 4px;
   background: #e8eef5;
+}
+
+.source-chip-retired {
+  flex: 0 0 auto;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: #6b7280;
+  padding: 0.05rem 0.3rem;
+  border-radius: 4px;
+  background: #f3f4f6;
+}
+
+.muted-source-name {
+  font-size: 0.75rem;
+  color: #6b7280;
+  margin-top: 0.15rem;
 }

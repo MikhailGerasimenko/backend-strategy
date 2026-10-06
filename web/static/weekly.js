@@ -17,6 +17,8 @@ let availableSources = [];
 let selectedSourceNames = new Set();
 let availableAttachmentIds = [];
 let attachmentMetaById = {};
+let promptDefaultCustomized = false;
+let cleanupPromptCustomized = false;
 let briefKindMatch = {
   full: ["news", "market", "all"],
   monthly: ["news", "market", "all"],
@@ -42,6 +44,124 @@ const BRIEF_KIND_LABELS = {
   monthly_corporate: "ежемесячный рыночный",
 };
 
+const STRUCTURE_MARKER = "ОБЯЗАТЕЛЬНАЯ СТРУКТУРА";
+const STRUCTURE_TITLE_RE =
+  /^(?:#{1,3}\s*)?(?:обязательная\s+)?структура(?:\s+(?:отчета|отчёта|брифа|дайджеста))?\s*:?\s*$/iu;
+const NUMBERED_SECTION_RE = /^(\d+)\.\s+\S.{0,78}$/;
+
+function isStructureMarkerLine(line) {
+  const stripped = String(line || "").trimStart().trim();
+  if (!stripped) return false;
+  if (stripped.startsWith(STRUCTURE_MARKER)) return true;
+  if (stripped.length > 60) return false;
+  return STRUCTURE_TITLE_RE.test(stripped);
+}
+
+function isMarkdownStructureHeading(line) {
+  return String(line || "").trimStart().trim().startsWith("## ");
+}
+
+function findNumberedStructureIndex(lines) {
+  const candidates = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const stripped = String(lines[i] || "").trimStart().trim();
+    if (stripped.length > 80) continue;
+    const match = stripped.match(NUMBERED_SECTION_RE);
+    if (!match) continue;
+    candidates.push({ index: i, num: Number(match[1]) });
+  }
+  if (!candidates.length) return -1;
+  if (candidates.length === 1) {
+    const only = candidates[0];
+    if (only.index > 0 && only.num <= 1) return only.index;
+    return -1;
+  }
+  const preferred = candidates.find((c) => c.num <= 1);
+  return (preferred || candidates[0]).index;
+}
+
+function splitBriefPrompt(text) {
+  const raw = text || "";
+  const lines = raw.split(/(?<=\n)/);
+  if (!lines.length) return { system_prompt: "", user_prompt: "" };
+
+  let splitAt = -1;
+  for (let i = 0; i < lines.length; i += 1) {
+    if (isStructureMarkerLine(lines[i])) {
+      splitAt = i;
+      break;
+    }
+  }
+  if (splitAt < 0) {
+    for (let i = 1; i < lines.length; i += 1) {
+      if (isMarkdownStructureHeading(lines[i])) {
+        splitAt = i;
+        break;
+      }
+    }
+  }
+  if (splitAt < 0) splitAt = findNumberedStructureIndex(lines);
+  if (splitAt < 0) return { system_prompt: raw.trim(), user_prompt: "" };
+
+  return {
+    system_prompt: lines.slice(0, splitAt).join("").replace(/\s+$/, ""),
+    user_prompt: lines.slice(splitAt).join("").trim(),
+  };
+}
+
+function joinBriefPrompt(systemPrompt, userPrompt) {
+  const system = (systemPrompt || "").trim();
+  let structure = (userPrompt || "").trim();
+  if (!structure) return system;
+  if (!system) return structure;
+  const firstLine = structure.split("\n")[0] || "";
+  const firstStripped = firstLine.trimStart().trim();
+  if (
+    !isStructureMarkerLine(firstLine) &&
+    !isMarkdownStructureHeading(firstLine) &&
+    !NUMBERED_SECTION_RE.test(firstStripped.slice(0, 90))
+  ) {
+    structure = `${STRUCTURE_MARKER}:\n${structure}`;
+  }
+  return `${system}\n\n${structure}`;
+}
+
+function getJoinedBriefPrompt() {
+  return joinBriefPrompt($("systemPrompt")?.value || "", $("userPrompt")?.value || "");
+}
+
+function fillBriefPromptFields(data) {
+  const systemEl = $("systemPrompt");
+  const userEl = $("userPrompt");
+  if (!systemEl) return;
+
+  const hasParts =
+    data &&
+    typeof data.system_prompt === "string" &&
+    typeof data.user_prompt === "string" &&
+    (data.system_prompt.length > 0 || data.user_prompt.length > 0);
+
+  if (hasParts) {
+    // Если бэкенд уже отдал две части — используем их как есть.
+    // Если user пустой, а в полном prompt граница есть — пересоберём локально.
+    if (!data.user_prompt && data.prompt) {
+      const parts = splitBriefPrompt(data.prompt);
+      if (parts.user_prompt) {
+        systemEl.value = parts.system_prompt;
+        if (userEl) userEl.value = parts.user_prompt;
+        return;
+      }
+    }
+    systemEl.value = data.system_prompt || "";
+    if (userEl) userEl.value = data.user_prompt || "";
+    return;
+  }
+
+  const parts = splitBriefPrompt(data?.prompt || "");
+  systemEl.value = parts.system_prompt;
+  if (userEl) userEl.value = parts.user_prompt;
+}
+
 /** Порядок категорий с листа health (колонка «Категория») в metallurgy_news Excel. */
 const TOPIC_GROUP_ORDER = [
   "Металлургия РФ",
@@ -51,7 +171,7 @@ const TOPIC_GROUP_ORDER = [
   "Макроэкономика мира",
   "Документы RAG",
 ];
-const DOC_SOURCE_NAMES = new Set(["Kallanish", "PDF отчёт", "PMI"]);
+const DOC_SOURCE_NAMES = new Set(["PDF отчёт", "PMI"]);
 const KALLANISH_SOURCE = "Kallanish";
 const PDF_SOURCE = "PDF отчёт";
 const PMI_SOURCE = "PMI";
@@ -93,6 +213,7 @@ function setButtonsDisabled(disabled) {
     "btnSelectAllSources",
     "btnClearSources",
     "btnRefreshAttachments",
+    "btnCleanupBrief",
     "btnExportDocx",
     "btnExportJson",
   ].forEach((id) => {
@@ -139,6 +260,33 @@ function updatePromptKindHint() {
   if (hint) hint.textContent = `Тип брифа: ${BRIEF_KIND_LABELS[selectedBriefKind] || selectedBriefKind}`;
 }
 
+function setPromptDefaultHint(text, kind = "") {
+  const el = $("promptDefaultHint");
+  if (!el) return;
+  el.textContent = text || "";
+  el.className = `hint ${kind}`.trim();
+}
+
+function setCleanupPromptHint(text, kind = "") {
+  const el = $("cleanupPromptHint");
+  if (!el) return;
+  el.textContent = text || "";
+  el.className = `hint ${kind}`.trim();
+}
+
+async function loadCleanupPrompt(briefKind = selectedBriefKind) {
+  const res = await apiFetch(`/api/weekly/cleanup-prompt?brief_kind=${encodeURIComponent(briefKind || "full")}`);
+  const data = await res.json();
+  if ($("cleanupPrompt")) $("cleanupPrompt").value = data.prompt || "";
+  cleanupPromptCustomized = Boolean(data.customized);
+  setCleanupPromptHint(
+    cleanupPromptCustomized
+      ? "Для clean-up сохранён ваш дефолтный промпт."
+      : "Используется общий дефолтный prompt clean-up.",
+    cleanupPromptCustomized ? "ok" : "",
+  );
+}
+
 async function loadPromptVariant(variant) {
   selectedBriefKind = variant || "full";
 
@@ -150,13 +298,224 @@ async function loadPromptVariant(variant) {
 
   const res = await apiFetch(`/api/weekly/default-prompt?${params.toString()}`);
   const data = await res.json();
-  $("systemPrompt").value = data.prompt || "";
+  fillBriefPromptFields(data);
+  promptDefaultCustomized = Boolean(data.customized);
   selectedBriefKind = data.variant || selectedBriefKind;
   updatePromptKindHint();
+  setPromptDefaultHint(
+    promptDefaultCustomized
+      ? "Для этого типа сохранён ваш дефолтный промпт."
+      : "Используется общий дефолтный промпт.",
+    promptDefaultCustomized ? "ok" : "",
+  );
+  await loadCleanupPrompt(selectedBriefKind);
   updateJsonExportVisibility();
-  await loadPeriodSources({ applyBriefFilter: true });
+  await loadPeriodSources();
   await checkCoverage();
 }
+
+async function savePromptDefault() {
+  const systemPrompt = $("systemPrompt")?.value.trim() || "";
+  const userPrompt = $("userPrompt")?.value.trim() || "";
+  const prompt = joinBriefPrompt(systemPrompt, userPrompt);
+  if (prompt.length < 50) {
+    setPromptDefaultHint("Промпт слишком короткий.", "err");
+    return;
+  }
+  const res = await apiFetch("/api/weekly/default-prompt", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      variant: selectedBriefKind || "full",
+      system_prompt: systemPrompt,
+      user_prompt: userPrompt,
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    setPromptDefaultHint(data.detail || "Не удалось сохранить дефолт.", "err");
+    return;
+  }
+  promptDefaultCustomized = true;
+  setPromptDefaultHint("Сохранено как ваш дефолтный промпт для этого типа.", "ok");
+  await mapPromptCtl.saveIfDirty();
+  await reducePromptCtl.saveIfDirty();
+}
+
+async function resetPromptDefault() {
+  const variant = selectedBriefKind || "full";
+  const res = await apiFetch(`/api/weekly/default-prompt?variant=${encodeURIComponent(variant)}`, {
+    method: "DELETE",
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    setPromptDefaultHint(data.detail || "Не удалось сбросить дефолт.", "err");
+    return;
+  }
+  promptDefaultCustomized = false;
+  await loadPromptVariant(variant);
+  setPromptDefaultHint("Возвращён общий дефолтный промпт.", "ok");
+}
+
+async function saveCleanupPromptDefault() {
+  const prompt = $("cleanupPrompt")?.value.trim() || "";
+  if (prompt.length < 50) {
+    setCleanupPromptHint("Промпт слишком короткий.", "err");
+    return;
+  }
+  const res = await apiFetch("/api/weekly/cleanup-prompt", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      variant: `cleanup::${selectedBriefKind || "full"}`,
+      prompt,
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    setCleanupPromptHint(data.detail || "Не удалось сохранить дефолт.", "err");
+    return;
+  }
+  cleanupPromptCustomized = true;
+  setCleanupPromptHint("Сохранено как ваш дефолтный clean-up prompt.", "ok");
+}
+
+async function resetCleanupPromptDefault() {
+  const briefKind = selectedBriefKind || "full";
+  const res = await apiFetch(`/api/weekly/cleanup-prompt?brief_kind=${encodeURIComponent(briefKind)}`, {
+    method: "DELETE",
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    setCleanupPromptHint(data.detail || "Не удалось сбросить дефолт.", "err");
+    return;
+  }
+  cleanupPromptCustomized = false;
+  await loadCleanupPrompt(briefKind);
+  setCleanupPromptHint("Возвращён общий дефолтный clean-up prompt.", "ok");
+}
+
+// --- Служебные промпты map/reduce (один на все типы брифа) ---
+
+function makeStagePrompt({ textareaId, hintId, detailsId, endpoint, variant, title }) {
+  let loadedValue = "";
+  let customized = false;
+  let saving = false;
+
+  const setHint = (text, kind = "") => {
+    const el = $(hintId);
+    if (!el) return;
+    el.textContent = text || "";
+    el.className = `hint ${kind}`.trim();
+  };
+
+  async function load() {
+    if (!$(textareaId)) return;
+    try {
+      const res = await apiFetch(endpoint);
+      const data = await res.json();
+      if (!res.ok) {
+        setHint(data.detail || `Не удалось загрузить ${title}.`, "err");
+        return;
+      }
+      loadedValue = data.prompt || "";
+      customized = Boolean(data.customized);
+      $(textareaId).value = loadedValue;
+      if (customized) $(detailsId)?.setAttribute("open", "");
+      setHint(
+        customized ? `Сохранён ваш дефолтный ${title}.` : `Используется общий дефолтный ${title}.`,
+        customized ? "ok" : "",
+      );
+    } catch (err) {
+      setHint(`Не удалось загрузить ${title}.`, "err");
+    }
+  }
+
+  function valueForRequest() {
+    const value = $(textareaId)?.value.trim() || "";
+    return value || null;
+  }
+
+  function isDirty() {
+    return (($(textareaId)?.value || "").trim() !== (loadedValue || "").trim());
+  }
+
+  async function saveDefault({ silent = false } = {}) {
+    const prompt = $(textareaId)?.value.trim() || "";
+    if (prompt.length < 50) {
+      if (!silent) setHint("Промпт слишком короткий.", "err");
+      return false;
+    }
+    if (saving) return false;
+    saving = true;
+    try {
+      const res = await apiFetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ variant, prompt }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setHint(data.detail || "Не удалось сохранить дефолт.", "err");
+        return false;
+      }
+      loadedValue = prompt;
+      customized = true;
+      $(detailsId)?.setAttribute("open", "");
+      setHint(
+        silent
+          ? `Автосохранено: ваш дефолтный ${title}.`
+          : `Сохранено как ваш дефолтный ${title}.`,
+        "ok",
+      );
+      return true;
+    } finally {
+      saving = false;
+    }
+  }
+
+  async function resetDefault() {
+    const res = await apiFetch(endpoint, { method: "DELETE" });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setHint(data.detail || "Не удалось сбросить дефолт.", "err");
+      return;
+    }
+    customized = false;
+    await load();
+    setHint(`Возвращён общий дефолтный ${title}.`, "ok");
+  }
+
+  async function saveIfDirty() {
+    if (!isDirty()) return false;
+    return saveDefault({ silent: true });
+  }
+
+  const textarea = $(textareaId);
+  textarea?.addEventListener("blur", () => {
+    void saveIfDirty();
+  });
+
+  return { load, valueForRequest, saveDefault, resetDefault, saveIfDirty, isDirty };
+}
+
+const mapPromptCtl = makeStagePrompt({
+  textareaId: "mapPrompt",
+  hintId: "mapPromptHint",
+  detailsId: "mapPromptDetails",
+  endpoint: "/api/weekly/map-prompt",
+  variant: "map",
+  title: "промпт фактографа",
+});
+
+const reducePromptCtl = makeStagePrompt({
+  textareaId: "reducePrompt",
+  hintId: "reducePromptHint",
+  detailsId: "reducePromptDetails",
+  endpoint: "/api/weekly/reduce-prompt",
+  variant: "reduce",
+  title: "промпт склейки",
+});
 
 function showCoverage(message, state) {
   const banner = $("coverageBanner");
@@ -288,13 +647,14 @@ function renderSourceChips() {
         `<span class="source-chip-kind">${kindBadge}</span>` +
         `<span class="source-chip-label">${labelText}</span>` +
         (item.custom ? `<span class="source-chip-custom">свой</span>` : "") +
+        (item.retired ? `<span class="source-chip-retired">архив</span>` : "") +
         (briefBadge
           ? `<span class="source-chip-brief">${briefBadge}</span>`
           : "") +
         `<span class="source-chip-count">${item.count}</span>`;
       btn.title = `${item.name}${briefBadge ? ` · ${briefBadge}` : ""} · ${topic}${
         item.custom ? " · добавлен коллегами" : ""
-      }`;
+      }${item.retired ? " · отключён, новости в RAG сохранены" : ""}`;
       btn.addEventListener("click", () => toggleSource(item.name));
       chips.appendChild(btn);
     }
@@ -374,7 +734,7 @@ function getSelectedSourcesPayload() {
   return selectedNews;
 }
 
-async function loadPeriodSources({ applyBriefFilter = false } = {}) {
+async function loadPeriodSources() {
   const start = $("periodStart").value;
   const end = $("periodEnd").value;
   if (!start || !end) return;
@@ -386,20 +746,13 @@ async function loadPeriodSources({ applyBriefFilter = false } = {}) {
   if (data.brief_kind_match) briefKindMatch = data.brief_kind_match;
   if (data.brief_labels) briefLabels = data.brief_labels;
 
-  if (applyBriefFilter || !selectedSourceNames.size) {
-    selectedSourceNames = new Set(
-      availableSources.filter((s) => sourceMatchesBriefKind(s)).map((s) => s.name),
-    );
-  } else {
+  if (selectedSourceNames.size) {
     const prev = new Set(selectedSourceNames);
     selectedSourceNames = new Set(
       availableSources.filter((s) => prev.has(s.name)).map((s) => s.name),
     );
-    if (!selectedSourceNames.size) {
-      selectedSourceNames = new Set(
-        availableSources.filter((s) => sourceMatchesBriefKind(s)).map((s) => s.name),
-      );
-    }
+  } else {
+    selectedSourceNames = new Set();
   }
   renderSourceChips();
   updateAttachmentSelectionHint();
@@ -491,8 +844,14 @@ async function uploadAttachment() {
 
   if (files.length === 1) {
     hint.className = "upload-hint ok";
-    hint.textContent =
-      `Проиндексировано: ${data.document_type}, ${data.chunks} чанков, «${data.title}»`;
+    if (data.storage === "news" || data.source === "Kallanish") {
+      hint.textContent =
+        `Kallanish → новости: ${data.articles || data.documents || 0} статей, ` +
+        `${data.chunks || 0} чанков, «${data.title || files[0].name}»`;
+    } else {
+      hint.textContent =
+        `Проиндексировано: ${data.document_type}, ${data.chunks} чанков, «${data.title}»`;
+    }
   } else {
     const parts = [
       `Готово: ${data.uploaded_count} из ${data.total}`,
@@ -506,8 +865,14 @@ async function uploadAttachment() {
 
     const details = [];
     for (const item of data.uploaded || []) {
-      const kind = item.document_type ? `${item.document_type}, ` : "";
-      details.push(`✓ ${item.filename || item.title} (${kind}${item.chunks} чанков)`);
+      if (item.storage === "news" || item.source === "Kallanish") {
+        details.push(
+          `✓ ${item.filename || item.title}: Kallanish → ${item.articles || item.documents || 0} статей (${item.chunks} чанков)`,
+        );
+      } else {
+        const kind = item.document_type ? `${item.document_type}, ` : "";
+        details.push(`✓ ${item.filename || item.title} (${kind}${item.chunks} чанков)`);
+      }
     }
     for (const item of data.skipped || []) {
       details.push(`↷ ${item.filename}: уже в RAG`);
@@ -523,6 +888,7 @@ async function uploadAttachment() {
   fileInput.value = "";
   updateAttachmentFileCount();
   await loadAttachmentLibrary();
+  await loadPeriodSources();
   await checkCoverage();
 }
 
@@ -706,6 +1072,7 @@ async function loadAttachmentLibrary() {
         title: doc.title || "",
         brief_date: doc.brief_date || "",
         period_end: doc.period_end || doc.brief_date || "",
+        catalog_only: Boolean(doc.catalog_only),
       };
     }
   }
@@ -731,10 +1098,17 @@ async function loadAttachmentLibrary() {
         : nameHint.endsWith(".txt") || nameHint.includes(".txt")
           ? "TXT"
           : "Word";
-    appendCell(row, doc.document_type || kind, "attachment-type");
+    const isKallanish = String(doc.document_type || "").toLowerCase().includes("kallanish");
+    const isPriceSheet = isKallanish && (nameHint.endsWith(".txt") || nameHint.includes(".txt"));
+    appendCell(row, isPriceSheet ? "Котировки" : doc.document_type || kind, "attachment-type");
     appendCell(row, doc.title || "—", "attachment-title");
     appendCell(row, formatAttachmentPeriod(doc), "attachment-period");
-    appendCell(row, String(doc.chunks ?? 0), "attachment-chunks");
+    const volume = isPriceSheet
+      ? "таблица"
+      : isKallanish && Number(doc.articles)
+        ? `${doc.articles} ст.`
+        : String(doc.chunks ?? 0);
+    appendCell(row, volume, "attachment-chunks");
     appendCell(row, doc.indexed_by || "—", "attachment-user");
     appendCell(row, formatCreatedAt(doc.created_at), "attachment-date");
 
@@ -766,7 +1140,7 @@ function updateAttachmentSelectionHint() {
     .join(", ");
   hint.textContent = enabledTypes
     ? `В бриф за период: ${forBrief} (типы: ${enabledTypes})`
-    : `В бриф: 0 — включите Kallanish / PDF / PMI в источниках`;
+    : `В бриф: 0 — включите PDF / PMI в источниках (Kallanish — как новости)`;
 }
 
 function attachmentOverlapsBriefPeriod(meta, start, end) {
@@ -788,6 +1162,7 @@ function getSelectedAttachmentIds() {
       if (!(id > 0)) return false;
       const meta = attachmentMetaById[id];
       if (!meta) return false;
+      if (meta.catalog_only) return false;
       if (!isAttachmentTypeEnabled(meta.document_type)) return false;
       return attachmentOverlapsBriefPeriod(meta, start, end);
     });
@@ -857,8 +1232,8 @@ function updateJsonExportVisibility() {
   if (btn) btn.hidden = !monthly;
   if (help) {
     help.textContent = monthly
-      ? "Проверьте и поправьте текст. Word — для рассылки, JSON — структурированные слайды для презентации (заголовки, буллиты, комментарий докладчика)."
-      : "Проверьте и поправьте текст. Затем нажмите «Скачать Word» — файл соберётся уже с вашими правками.";
+      ? "Проверьте и поправьте текст. При необходимости нажмите LLM clean-up, затем Word или JSON для презентации."
+      : "Проверьте и поправьте текст. При необходимости нажмите LLM clean-up, затем «Скачать Word».";
   }
 }
 
@@ -873,8 +1248,8 @@ function showBriefEditor(content) {
   if (hint) {
     hint.className = "hint";
     hint.textContent = isMonthlyBriefKind()
-      ? "Можно править текст перед экспортом в Word или JSON."
-      : "Можно править текст перед экспортом в Word.";
+      ? "Можно править текст, затем по желанию запустить LLM clean-up перед экспортом."
+      : "Можно править текст и по желанию запустить LLM clean-up перед экспортом.";
   }
   card.scrollIntoView({ behavior: "smooth", block: "start" });
 }
@@ -885,6 +1260,128 @@ function stopPolling() {
     pollTimer = null;
   }
 }
+
+// --- Просмотр дайджестов map-батчей ---------------------------------------
+const mapDigestsState = { jobId: null, items: [], cache: new Map(), current: 0 };
+
+function hideMapDigests() {
+  mapDigestsState.jobId = null;
+  mapDigestsState.items = [];
+  mapDigestsState.cache = new Map();
+  mapDigestsState.current = 0;
+  const card = $("mapDigestsCard");
+  if (card) card.hidden = true;
+  const body = $("mapDigestBody");
+  if (body) body.textContent = "—";
+  const meta = $("mapDigestMeta");
+  if (meta) meta.textContent = "";
+}
+
+function renderMapDigestsSummary(jobId, items) {
+  const card = $("mapDigestsCard");
+  const select = $("mapDigestSelect");
+  if (!card || !select) return;
+  if (!Array.isArray(items) || !items.length) {
+    hideMapDigests();
+    return;
+  }
+  mapDigestsState.jobId = jobId;
+  mapDigestsState.items = items;
+  mapDigestsState.cache = new Map();
+  const total = items.length;
+  select.innerHTML = items
+    .map((item, i) => {
+      const index = Number(item.index) || i + 1;
+      const materials = Number(item.materials) || 0;
+      const chars = Number(item.chars) || 0;
+      const label = `Батч ${index} из ${total} · ${materials} материалов · ${Math.round(chars / 1000)}k симв.`;
+      return `<option value="${index}">${label}</option>`;
+    })
+    .join("");
+  const count = $("mapDigestsCount");
+  if (count) count.textContent = String(total);
+  card.hidden = false;
+  showMapDigest(Number(items[0].index) || 1);
+}
+
+async function showMapDigest(index) {
+  const { jobId, items } = mapDigestsState;
+  if (!jobId || !items.length) return;
+  const total = items.length;
+  const safeIndex = Math.min(Math.max(1, Number(index) || 1), total);
+  mapDigestsState.current = safeIndex;
+  const select = $("mapDigestSelect");
+  const body = $("mapDigestBody");
+  const meta = $("mapDigestMeta");
+  if (select) select.value = String(safeIndex);
+  if ($("btnMapDigestPrev")) $("btnMapDigestPrev").disabled = safeIndex <= 1;
+  if ($("btnMapDigestNext")) $("btnMapDigestNext").disabled = safeIndex >= total;
+  if (!body) return;
+
+  let item = mapDigestsState.cache.get(safeIndex);
+  if (!item) {
+    body.textContent = "Загрузка…";
+    try {
+      const res = await apiFetch(`/api/jobs/${jobId}/map-digests/${safeIndex}`);
+      const data = await res.json();
+      if (!res.ok) {
+        body.textContent = data.detail || "Не удалось загрузить дайджест";
+        return;
+      }
+      item = data;
+      mapDigestsState.cache.set(safeIndex, item);
+    } catch (e) {
+      body.textContent = "Сбой соединения при загрузке дайджеста";
+      return;
+    }
+  }
+  // Пользователь мог переключить батч, пока грузился этот.
+  if (mapDigestsState.current !== safeIndex) return;
+  body.textContent = item.content || "(пустой дайджест)";
+  if (meta) {
+    meta.textContent = `${item.materials ?? "—"} материалов · ${(item.content || "").length} символов`;
+  }
+}
+
+async function loadMapDigests(jobId) {
+  try {
+    const res = await apiFetch(`/api/jobs/${jobId}/map-digests`);
+    if (!res.ok) {
+      hideMapDigests();
+      return;
+    }
+    const data = await res.json();
+    renderMapDigestsSummary(jobId, data.items || []);
+  } catch (e) {
+    hideMapDigests();
+  }
+}
+
+$("mapDigestSelect")?.addEventListener("change", (e) => {
+  showMapDigest(Number(e.target.value));
+});
+$("btnMapDigestPrev")?.addEventListener("click", () => showMapDigest(mapDigestsState.current - 1));
+$("btnMapDigestNext")?.addEventListener("click", () => showMapDigest(mapDigestsState.current + 1));
+$("btnMapDigestsDocx")?.addEventListener("click", () => {
+  const jobId = mapDigestsState.jobId;
+  if (!jobId || !mapDigestsState.items.length) return;
+  window.location.href = `/api/jobs/${jobId}/map-digests.docx`;
+});
+$("btnMapDigestCopy")?.addEventListener("click", async () => {
+  const item = mapDigestsState.cache.get(mapDigestsState.current);
+  const text = item?.content || "";
+  if (!text) return;
+  const btn = $("btnMapDigestCopy");
+  try {
+    await navigator.clipboard.writeText(text);
+    if (btn) {
+      btn.textContent = "Скопировано";
+      setTimeout(() => (btn.textContent = "Скопировать"), 1500);
+    }
+  } catch (e) {
+    if (btn) btn.textContent = "Не удалось скопировать";
+  }
+});
 
 async function pollJob(jobId) {
   const res = await apiFetch(`/api/jobs/${jobId}`);
@@ -911,6 +1408,11 @@ async function pollJob(jobId) {
     if (job.result?.brief_kind) {
       selectedBriefKind = job.result.brief_kind;
       updatePromptKindHint();
+    }
+    if (Array.isArray(job.result?.map_digests_summary) && job.result.map_digests_summary.length) {
+      renderMapDigestsSummary(jobId, job.result.map_digests_summary);
+    } else {
+      loadMapDigests(jobId);
     }
     if (content) {
       $("jobStatus").textContent = isMonthlyBriefKind()
@@ -1007,6 +1509,47 @@ async function exportBriefDocx() {
   window.location.href = url;
 }
 
+async function cleanupBrief() {
+  if (!activeJobId) {
+    alert("Сначала сгенерируйте бриф.");
+    return;
+  }
+  const content = ($("briefEditor")?.value || "").trim();
+  if (content.length < 50) {
+    alert("Текст брифа слишком короткий.");
+    return;
+  }
+  const hint = $("briefExportHint");
+  if (hint) {
+    hint.className = "hint";
+    hint.textContent = "LLM clean-up выполняется…";
+  }
+  setButtonsDisabled(true);
+  const cleanupPrompt = $("cleanupPrompt")?.value.trim() || "";
+  const res = await apiFetch(`/api/jobs/${activeJobId}/cleanup-brief`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content, system_prompt: cleanupPrompt || null }),
+  });
+  const data = await res.json().catch(() => ({}));
+  setButtonsDisabled(false);
+  if (!res.ok) {
+    if (hint) {
+      hint.className = "hint err";
+      hint.textContent = data.detail || `Ошибка ${res.status}`;
+    }
+    alert(data.detail || `Ошибка ${res.status}`);
+    return;
+  }
+  if ($("briefEditor")) $("briefEditor").value = data.content || content;
+  if (hint) {
+    hint.className = `hint ${data.cleanup_pass ? "ok" : ""}`.trim();
+    hint.textContent = data.cleanup_pass
+      ? "Clean-up готов: текст обновлён."
+      : "Clean-up завершён: оставлен исходный текст.";
+  }
+}
+
 async function exportBriefJson() {
   if (!activeJobId) {
     alert("Сначала сгенерируйте бриф.");
@@ -1051,7 +1594,7 @@ async function exportBriefJson() {
 }
 
 async function startWeeklyBrief() {
-  const prompt = $("systemPrompt").value.trim();
+  const prompt = getJoinedBriefPrompt();
   if (prompt.length < 50) {
     alert("Промпт слишком короткий.");
     return;
@@ -1060,6 +1603,8 @@ async function startWeeklyBrief() {
     period_start: $("periodStart").value,
     period_end: $("periodEnd").value,
     system_prompt: prompt,
+    map_system_prompt: mapPromptCtl.valueForRequest(),
+    reduce_instructions: reducePromptCtl.valueForRequest(),
     model: null,
     brief_kind: selectedBriefKind,
   };
@@ -1071,19 +1616,21 @@ async function startWeeklyBrief() {
   const attachmentIds = getSelectedAttachmentIds();
   const noNews = Array.isArray(selectedSources) && selectedSources.length === 0;
   if (noNews && !anyDocSourceSelected()) {
-    alert("Выберите хотя бы один источник (новости или документы: Kallanish / PDF / PMI).");
+    alert("Выберите хотя бы один источник (новости, Kallanish или документы: PDF / PMI).");
     return;
   }
   if (noNews && anyDocSourceSelected() && !attachmentIds.length) {
     const enabled = [...DOC_SOURCE_NAMES].filter((n) => isDocSourceSelected(n)).join(", ");
     alert(
       `Выбраны только документы (${enabled || "—"}), но в библиотеке нет файлов этих типов за период. ` +
-        "Загрузите документы или добавьте новостные источники.",
+        "Загрузите документы или добавьте новостные источники / Kallanish.",
     );
     return;
   }
   if (selectedSources !== null) payload.sources = selectedSources;
   payload.attachment_ids = attachmentIds;
+  await mapPromptCtl.saveIfDirty();
+  await reducePromptCtl.saveIfDirty();
   setGenerationRunning(true);
   const stopBtn = $("btnStopWeeklyBrief");
   if (stopBtn) stopBtn.textContent = "Остановить";
@@ -1095,6 +1642,7 @@ async function startWeeklyBrief() {
     $("briefExportHint").textContent = "";
   }
   $("jobLog").textContent = "";
+  hideMapDigests();
   const res = await apiFetch("/api/jobs/weekly-brief", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -1125,6 +1673,8 @@ async function init() {
   await loadPeriodSources();
   await loadAttachmentLibrary();
   await loadPromptVariant("full");
+  await mapPromptCtl.load();
+  await reducePromptCtl.load();
 }
 
 $("btnLogout")?.addEventListener("click", async () => {
@@ -1136,6 +1686,14 @@ $("btnLoadMarket")?.addEventListener("click", () => loadPromptVariant("market"))
 $("btnLoadCorporate")?.addEventListener("click", () => loadPromptVariant("corporate"));
 $("btnLoadMonthlyNews")?.addEventListener("click", () => loadPromptVariant("monthly_news"));
 $("btnLoadMonthlyMarket")?.addEventListener("click", () => loadPromptVariant("monthly_market"));
+$("btnSavePromptDefault")?.addEventListener("click", savePromptDefault);
+$("btnResetPromptDefault")?.addEventListener("click", resetPromptDefault);
+$("btnSaveCleanupPromptDefault")?.addEventListener("click", saveCleanupPromptDefault);
+$("btnResetCleanupPromptDefault")?.addEventListener("click", resetCleanupPromptDefault);
+$("btnSaveMapPromptDefault")?.addEventListener("click", () => mapPromptCtl.saveDefault());
+$("btnResetMapPromptDefault")?.addEventListener("click", () => mapPromptCtl.resetDefault());
+$("btnSaveReducePromptDefault")?.addEventListener("click", () => reducePromptCtl.saveDefault());
+$("btnResetReducePromptDefault")?.addEventListener("click", () => reducePromptCtl.resetDefault());
 $("btnCheckCoverage")?.addEventListener("click", async () => {
   await loadPeriodSources();
   await checkCoverage();
@@ -1145,13 +1703,13 @@ $("btnSelectAllSources")?.addEventListener("click", selectAllSources);
 $("btnClearSources")?.addEventListener("click", clearAllSources);
 $("periodStart")?.addEventListener("change", async () => {
   await loadPeriodSources();
-  if (selectedBriefKind) await loadPromptVariant(selectedBriefKind);
   updateAttachmentSelectionHint();
+  await checkCoverage();
 });
 $("periodEnd")?.addEventListener("change", async () => {
   await loadPeriodSources();
-  if (selectedBriefKind) await loadPromptVariant(selectedBriefKind);
   updateAttachmentSelectionHint();
+  await checkCoverage();
 });
 $("btnUploadAttachment")?.addEventListener("click", uploadAttachment);
 $("attachmentFile")?.addEventListener("change", updateAttachmentFileCount);
@@ -1159,6 +1717,7 @@ $("btnRefreshAttachments")?.addEventListener("click", loadAttachmentLibrary);
 $("attachmentFilterByPeriod")?.addEventListener("change", loadAttachmentLibrary);
 $("btnWeeklyBrief")?.addEventListener("click", startWeeklyBrief);
 $("btnStopWeeklyBrief")?.addEventListener("click", stopWeeklyBrief);
+$("btnCleanupBrief")?.addEventListener("click", cleanupBrief);
 $("btnExportDocx")?.addEventListener("click", exportBriefDocx);
 $("btnExportJson")?.addEventListener("click", exportBriefJson);
 

@@ -6,7 +6,8 @@
       "url": "https://www.metalinfo.ru/ru/news/rferrous.html",
       "category": "ferrous_domestic",
       "max_pages": 4,
-      "enabled": true
+      "enabled": true,
+      "note": "С VPS metalinfo.ru отдаёт заглушку «доступ ограничен». Ночной cron источник пропускает."
     },
     {
       "name": "MetalInfo Abroad",
@@ -14,7 +15,8 @@
       "url": "https://www.metalinfo.ru/ru/news/rferrousabroad.html",
       "category": "ferrous_abroad",
       "max_pages": 4,
-      "enabled": true
+      "enabled": true,
+      "note": "С VPS metalinfo.ru отдаёт заглушку «доступ ограничен». Ночной cron источник пропускает."
     },
     {
       "name": "Eurometal",
@@ -42,13 +44,13 @@
     },
     {
       "name": "GMK.Center",
-      "parser": "generic_html",
+      "parser": "rss",
       "url": "https://gmk.center/news/",
+      "rss_url": "https://gmk.center/feed/",
       "category": "steel_news",
-      "max_pages": 3,
-      "use_browser": true,
-      "enabled": false,
-      "note": "Отключён: агрессивная анти-бот защита (JS-challenge на всех эндпоинтах, детектит headless). Нужен внешний unblocker API (ZenRows/ScrapingBee/Bright Data)."
+      "max_items": 40,
+      "enabled": true,
+      "note": "HTML закрыт антиботом; берём официальный RSS /feed/."
     },
     {
       "name": "Reuters Economy",
@@ -87,19 +89,26 @@
     },
     {
       "name": "Bloomberg Economics",
-      "parser": "generic_html",
+      "parser": "rss",
       "url": "https://www.bloomberg.com/economics",
+      "rss_url": "https://www.bloomberg.com/feeds/economics/news.rss",
+      "exclude_path_fragments": ["/videos/"],
       "category": "global_economy",
-      "max_pages": 1,
-      "enabled": true
+      "max_items": 30,
+      "enabled": true,
+      "note": "HTML отдаёт 403; берём RSS /feeds/economics/news.rss."
     },
     {
       "name": "RBC Economics",
-      "parser": "generic_html",
+      "parser": "rss",
       "url": "https://www.rbc.ru/rubric/economics",
+      "rss_url": "https://rssexport.rbc.ru/rbcnews/news/30/full.rss",
+      "path_prefixes": ["/economics/", "/business/", "/quote/", "/finances/"],
+      "include_categories": ["Экономика", "Бизнес", "Инвестиции"],
       "category": "economics",
-      "max_pages": 1,
-      "enabled": true
+      "max_items": 40,
+      "enabled": true,
+      "note": "HTML с VPS даёт 401; из общей RSS берём экономику/бизнес/инвестиции."
     },
     {
       "name": "Kommersant Business",

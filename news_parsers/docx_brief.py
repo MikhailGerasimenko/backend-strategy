@@ -11,6 +11,8 @@ from typing import Any
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 from docx.shared import Cm, Inches, Pt, RGBColor
 from docx.text.paragraph import Paragraph
 
@@ -264,6 +266,50 @@ def write_brief_docx(
     return path
 
 
+def write_map_digests_docx(
+    digests: list[dict],
+    *,
+    period_label: str | None = None,
+) -> bytes:
+    """Один Word со всеми дайджестами фактографа: батч с новой страницы."""
+    from io import BytesIO
+
+    document = Document()
+    _configure_prompt_document(document)
+    _add_prompt_header(document)
+
+    title = document.add_paragraph(style="Heading 1")
+    _add_formatted_text(title, "Дайджесты фактографа")
+    intro = document.add_paragraph()
+    intro.paragraph_format.space_after = Pt(10)
+    parts = [f"Батчей: {len(digests)}"]
+    if period_label:
+        parts.append(f"Период: {period_label}")
+    parts.append("Промежуточные тексты до сборки финального брифа.")
+    run = intro.add_run(" · ".join(parts))
+    run.font.name = "Arial"
+    run.font.size = Pt(9)
+    run.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+
+    for offset, item in enumerate(digests):
+        index = int(item.get("index") or offset + 1)
+        total = int(item.get("total") or len(digests))
+        materials = item.get("materials")
+        heading_text = f"Батч {index} из {total}"
+        if materials:
+            heading_text += f" · {materials} материалов"
+        heading = document.add_paragraph(style="Heading 1")
+        heading.paragraph_format.page_break_before = offset > 0
+        _add_formatted_text(heading, heading_text)
+        current_section: str | None = None
+        for line in str(item.get("content") or "").splitlines():
+            current_section = _add_prompt_line(document, line, current_section)
+
+    buffer = BytesIO()
+    document.save(buffer)
+    return buffer.getvalue()
+
+
 def _add_prompt_header(document: Document) -> None:
     logo_path = next((path for path in LOGO_CANDIDATES if path.is_file()), None)
 
@@ -292,9 +338,10 @@ def _configure_prompt_document(document: Document) -> None:
 
     for section in document.sections:
         section.top_margin = Cm(1.6)
-        section.bottom_margin = Cm(1.6)
+        section.bottom_margin = Cm(1.8)
         section.left_margin = Cm(2.0)
         section.right_margin = Cm(1.6)
+        _add_page_numbers(section)
 
     for style_name, size in (("Heading 1", 14), ("Heading 2", 12), ("Heading 3", 11)):
         style = document.styles[style_name]
@@ -305,11 +352,64 @@ def _configure_prompt_document(document: Document) -> None:
         style.paragraph_format.space_after = Pt(6)
 
 
+def _add_page_numbers(section) -> None:
+    """Нумерация страниц в нижнем колонтитуле: «N из M» по центру."""
+    footer = section.footer
+    footer.is_linked_to_previous = False
+    paragraph = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
+    paragraph.clear()
+    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    paragraph.paragraph_format.space_before = Pt(0)
+    paragraph.paragraph_format.space_after = Pt(0)
+
+    run = paragraph.add_run()
+    run.font.name = "Arial"
+    run.font.size = Pt(9)
+    run.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+    _append_page_field(run, "PAGE")
+
+    sep = paragraph.add_run(" из ")
+    sep.font.name = "Arial"
+    sep.font.size = Pt(9)
+    sep.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+
+    run_total = paragraph.add_run()
+    run_total.font.name = "Arial"
+    run_total.font.size = Pt(9)
+    run_total.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+    _append_page_field(run_total, "NUMPAGES")
+
+
+def _append_page_field(run, instruction: str) -> None:
+    """Вставляет Word-поле (PAGE / NUMPAGES) в run."""
+    fld_begin = OxmlElement("w:fldChar")
+    fld_begin.set(qn("w:fldCharType"), "begin")
+
+    instr = OxmlElement("w:instrText")
+    instr.set(qn("xml:space"), "preserve")
+    instr.text = instruction
+
+    fld_separate = OxmlElement("w:fldChar")
+    fld_separate.set(qn("w:fldCharType"), "separate")
+
+    # Заглушка, пока Word/LibreOffice не обновят поля при открытии.
+    placeholder = OxmlElement("w:t")
+    placeholder.text = "1"
+
+    fld_end = OxmlElement("w:fldChar")
+    fld_end.set(qn("w:fldCharType"), "end")
+
+    run._r.append(fld_begin)
+    run._r.append(instr)
+    run._r.append(fld_separate)
+    run._r.append(placeholder)
+    run._r.append(fld_end)
+
+
 def _add_prompt_line(document: Document, line: str, current_section: str | None = None) -> str | None:
     stripped = line.strip()
     if not stripped:
-        spacer = document.add_paragraph()
-        spacer.paragraph_format.space_after = Pt(6)
+        # Пустые строки markdown не превращаем в пустые абзацы Word (¶ между блоками).
         return current_section
     if stripped in {"---", "— — —"}:
         return current_section

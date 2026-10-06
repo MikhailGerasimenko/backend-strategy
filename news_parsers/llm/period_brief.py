@@ -10,13 +10,16 @@
 from __future__ import annotations
 
 import re
+import threading
+import time
+from concurrent.futures import FIRST_EXCEPTION, ThreadPoolExecutor, wait
 from datetime import date
 from pathlib import Path
 from typing import Any, Callable, Sequence
 
 from ..rag.vector_backend import NewsDocument, fetch_news_documents_for_period
 from .brief import SYSTEM_PROMPT_VARIANTS
-from .config import BRIEF_CHUNK_SIZE, BRIEF_MODEL, MAX_TOKENS
+from .config import BRIEF_CHUNK_SIZE, BRIEF_MAP_CONCURRENCY, BRIEF_MODEL, MAX_TOKENS
 from .openrouter import GenerationCancelled, chat_completion, _check_cancel
 from .weekly_brief import WEEKLY_SYSTEM_PROMPTS, get_weekly_system_prompt
 
@@ -75,6 +78,18 @@ MAP_SYSTEM_PROMPT = (
     "и рыночные факты по разделам, не ограничивайся одним абзацем.\n"
     "Не пиши финальный бриф и не копируй структуру системного промпта отчёта — "
     "только дайджест фактов."
+)
+
+# Инструкции reduce-этапа (склейка дайджестов в один бриф). Редактируются в UI.
+# Период, тип брифа, правила по [n], сами дайджесты и PDF-контекст код добавляет сам.
+REDUCE_INSTRUCTIONS_PROMPT = (
+    "Собери ОДИН итоговый бриф строго по системному промпту.\n"
+    "Правила:\n"
+    "• структура разделов, тон и формат — только из системного промпта;\n"
+    "• не выдумывай факты, цифры, компании и события;\n"
+    "• одинаковые события/перепечатки схлопни в один факт;\n"
+    "• если в дайджестах уже есть цены, котировки или события — перенеси их "
+    "в нужные разделы; не пиши «Релевантных новостей нет», когда факты есть;"
 )
 
 MAP_USER_TEMPLATE = """Период: {period_label}
@@ -346,26 +361,6 @@ def _dedupe_documents(docs: Sequence[NewsDocument]) -> list[NewsDocument]:
     return [best_by_key[key] for key in order]
 
 
-def _batch_documents(
-    docs: Sequence[NewsDocument], *, char_budget: int
-) -> list[list[tuple[int, NewsDocument]]]:
-    """Батчи по бюджету символов. Каждая новость целиком — не режется на части."""
-    batches: list[list[tuple[int, NewsDocument]]] = []
-    current: list[tuple[int, NewsDocument]] = []
-    current_chars = 0
-    for ref, doc in enumerate(docs, start=1):
-        doc_chars = len(doc.full_text) + len(doc.title) + 80
-        if current and current_chars + doc_chars > char_budget:
-            batches.append(current)
-            current = []
-            current_chars = 0
-        current.append((ref, doc))
-        current_chars += doc_chars
-    if current:
-        batches.append(current)
-    return batches
-
-
 def _batch_documents_by_count(
     docs: Sequence[NewsDocument], *, size: int
 ) -> list[list[tuple[int, NewsDocument]]]:
@@ -490,6 +485,7 @@ def _build_reduce_user(
     pdf_context: str,
     allow_citations: bool,
     attachments_only: bool = False,
+    instructions: str | None = None,
 ) -> str:
     period_label = _period_label(period_start, period_end)
     if attachments_only:
@@ -503,15 +499,8 @@ def _build_reduce_user(
             "Номера [n] внутри дайджестов — служебные, для сборки фактов."
         )
 
-    rules = [
-        "Собери ОДИН итоговый бриф строго по системному промпту.",
-        "Правила:",
-        "• структура разделов, тон и формат — только из системного промпта;",
-        "• не выдумывай факты, цифры, компании и события;",
-        "• одинаковые события/перепечатки схлопни в один факт;",
-        "• если в дайджестах уже есть цены, котировки или события — перенеси их "
-        "в нужные разделы; не пиши «Релевантных новостей нет», когда факты есть;",
-    ]
+    base = (instructions or "").strip() or REDUCE_INSTRUCTIONS_PROMPT
+    rules = [base]
     if allow_citations:
         rules.extend(
             [
@@ -556,12 +545,15 @@ def generate_period_brief(
     period_end: date,
     brief_kind: str = "full",
     system_prompt: str | None = None,
+    map_system_prompt: str | None = None,
+    reduce_instructions: str | None = None,
     model: str | None = None,
     log: Any = None,
     news_dir: Path | None = None,
     sources: Sequence[str] | None = None,
     attachment_ids: Sequence[int] | None = None,
     should_cancel: Callable[[], bool] | None = None,
+    map_concurrency: int | None = None,
 ) -> tuple[str, dict[str, Any]]:
     def _log(msg: str) -> None:
         if log:
@@ -579,6 +571,15 @@ def generate_period_brief(
     )
     allow_citations = citations_allowed(effective_system, kind)
     effective_model = model or BRIEF_MODEL
+    # Промпт фактографа (map-этап): пользовательский или дефолт из кода.
+    effective_map_system = (map_system_prompt or "").strip() or MAP_SYSTEM_PROMPT
+    custom_map_prompt = effective_map_system != MAP_SYSTEM_PROMPT
+    if custom_map_prompt:
+        _log("Map-этап: используется пользовательский промпт фактографа")
+    effective_reduce_instructions = (reduce_instructions or "").strip() or REDUCE_INSTRUCTIONS_PROMPT
+    custom_reduce_prompt = effective_reduce_instructions != REDUCE_INSTRUCTIONS_PROMPT
+    if custom_reduce_prompt:
+        _log("Reduce-этап: используется пользовательский промпт склейки")
 
     if sources is not None:
         _log(
@@ -653,25 +654,28 @@ def generate_period_brief(
     )
 
     map_batches = len(batches)
-    digests: list[str] = []
-    for index, batch in enumerate(batches, start=1):
-        _check_cancel(should_cancel)
-        _log(f"  обработка батча {index}/{len(batches)} ({len(batch)} материалов)…")
-        digest = chat_completion(
-            system_prompt=MAP_SYSTEM_PROMPT,
-            user_prompt=_build_map_user(
-                period_start=period_start,
-                period_end=period_end,
-                batch_index=index,
-                batch_total=len(batches),
-                batch_body=_render_batch(batch),
-            ),
-            model=effective_model,
-            max_tokens=MAX_TOKENS,
-            temperature=0.15,
-            should_cancel=should_cancel,
-        )
-        digests.append(digest.strip())
+    map_started = time.monotonic()
+    digests = _run_map_stage(
+        batches,
+        period_start=period_start,
+        period_end=period_end,
+        map_system=effective_map_system,
+        model=effective_model,
+        concurrency=map_concurrency or BRIEF_MAP_CONCURRENCY,
+        log=_log,
+        should_cancel=should_cancel,
+    )
+    _log(f"Map-этап завершён за {time.monotonic() - map_started:.0f} с")
+    map_digests: list[dict[str, Any]] = [
+        {
+            "index": i,
+            "total": map_batches,
+            "materials": len(batch),
+            "chars": len(digest),
+            "content": digest,
+        }
+        for i, (batch, digest) in enumerate(zip(batches, digests), start=1)
+    ]
 
     # Семантический top-k больше не нужен, если полные тексты уже прошли map.
     # Оставляем fallback только когда вложения не заданы явно (legacy).
@@ -707,6 +711,7 @@ def generate_period_brief(
         pdf_context=pdf_context,
         allow_citations=allow_citations,
         attachments_only=attachments_only,
+        instructions=effective_reduce_instructions,
     )
 
     content = chat_completion(
@@ -731,6 +736,7 @@ def generate_period_brief(
         "period_start": period_start.isoformat(),
         "period_end": period_end.isoformat(),
         "generation_mode": "rag_raw_news_map_reduce",
+        "api_calls": map_batches + 1,
         "news_documents": len(docs),
         "news_before_dedupe": before_dedupe,
         "attachment_parts": len(attachment_docs),
@@ -739,8 +745,103 @@ def generate_period_brief(
         "citations_in_output": allow_citations,
         "model": effective_model,
         "custom_system_prompt": bool(system_prompt and system_prompt.strip()),
+        "custom_map_prompt": custom_map_prompt,
+        "custom_reduce_prompt": custom_reduce_prompt,
         "sources_filter": list(sources) if sources is not None else None,
         "attachment_ids": list(attachment_ids) if attachment_ids is not None else None,
         "attachments_only": attachments_only,
+        "map_concurrency": map_concurrency or BRIEF_MAP_CONCURRENCY,
+        "map_digests": map_digests,
     }
     return content, metadata
+
+
+def _run_map_stage(
+    batches: Sequence[Sequence[NewsDocument]],
+    *,
+    period_start: date,
+    period_end: date,
+    map_system: str,
+    model: str,
+    concurrency: int,
+    log: Callable[[str], None],
+    should_cancel: Callable[[], bool] | None,
+) -> list[str]:
+    """Map-этап: батчи уходят в модель параллельно (до `concurrency` одновременно).
+
+    Результат всегда в исходном порядке батчей. При отмене или ошибке одного
+    батча остальные не запускаются, а уже идущие запросы завершаются через
+    `should_cancel` (внутри chat_completion) либо просто игнорируются.
+    """
+    total = len(batches)
+    if total == 0:
+        return []
+    workers = max(1, min(int(concurrency or 1), total))
+    log_lock = threading.Lock()
+    stop_event = threading.Event()
+    in_flight: set[int] = set()
+
+    def _safe_log(message: str) -> None:
+        with log_lock:
+            log(message)
+
+    def _flight_label() -> str:
+        running = ", ".join(str(i) for i in sorted(in_flight)) or "—"
+        return f"в работе: {running} ({len(in_flight)}/{workers})"
+
+    def _cancel_requested() -> bool:
+        return stop_event.is_set() or bool(should_cancel and should_cancel())
+
+    def _process(index: int, batch: Sequence[NewsDocument]) -> str:
+        _check_cancel(_cancel_requested)
+        started = time.monotonic()
+        with log_lock:
+            in_flight.add(index)
+            log(
+                f"  батч {index}/{total}: старт ({len(batch)} материалов), "
+                f"{_flight_label()}"
+            )
+        digest = chat_completion(
+            system_prompt=map_system,
+            user_prompt=_build_map_user(
+                period_start=period_start,
+                period_end=period_end,
+                batch_index=index,
+                batch_total=total,
+                batch_body=_render_batch(batch),
+            ),
+            model=model,
+            max_tokens=MAX_TOKENS,
+            temperature=0.15,
+            should_cancel=_cancel_requested,
+        ).strip()
+        with log_lock:
+            in_flight.discard(index)
+            log(
+                f"  батч {index}/{total}: готов за {time.monotonic() - started:.0f} с "
+                f"({len(digest)} символов), {_flight_label()}"
+            )
+        return digest
+
+    if workers == 1:
+        return [_process(i, batch) for i, batch in enumerate(batches, start=1)]
+
+    log(f"Map-этап: параллельно до {workers} батчей одновременно")
+    results: dict[int, str] = {}
+    with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="map-batch") as pool:
+        futures = {
+            pool.submit(_process, i, batch): i for i, batch in enumerate(batches, start=1)
+        }
+        pending = set(futures)
+        try:
+            while pending:
+                done, pending = wait(pending, return_when=FIRST_EXCEPTION)
+                for fut in done:
+                    results[futures[fut]] = fut.result()
+        except BaseException:
+            # Первая ошибка/отмена: гасим остальные и не ждём их результата.
+            stop_event.set()
+            for fut in pending:
+                fut.cancel()
+            raise
+    return [results[i] for i in range(1, total + 1)]

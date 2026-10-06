@@ -7,7 +7,7 @@ OPENROUTER_BASE_URL = os.getenv(
     "OPENROUTER_BASE_URL",
     "https://openrouter.ai/api/v1/chat/completions",
 ).strip()
-BRIEF_MODEL = os.getenv("BRIEF_MODEL", "google/gemini-2.5-flash").strip()
+BRIEF_MODEL = os.getenv("BRIEF_MODEL", "google/gemini-3.6-flash").strip()
 HTTP_TIMEOUT = int(os.getenv("OPENROUTER_TIMEOUT", "180"))
 OPENROUTER_RETRIES = int(os.getenv("OPENROUTER_RETRIES", "6"))
 OPENROUTER_RETRY_BASE_SEC = float(os.getenv("OPENROUTER_RETRY_BASE_SEC", "15"))
@@ -23,3 +23,7 @@ BRIEF_CHUNK_SIZE = int(os.getenv("BRIEF_CHUNK_SIZE", "60"))
 BRIEF_CHUNK_THRESHOLD = int(os.getenv("BRIEF_CHUNK_THRESHOLD", str(BRIEF_CHUNK_SIZE)))
 BRIEF_CHUNK_PAUSE_SEC = float(os.getenv("BRIEF_CHUNK_PAUSE_SEC", "20"))
 BRIEF_KALLANISH_MAX_CHARS = int(os.getenv("BRIEF_KALLANISH_MAX_CHARS", "60000"))
+
+# Period-бриф: сколько map-батчей отправлять в модель одновременно.
+# 1 = строго по очереди (старое поведение). Больше — быстрее, но выше риск 429.
+BRIEF_MAP_CONCURRENCY = max(1, int(os.getenv("BRIEF_MAP_CONCURRENCY", "3")))

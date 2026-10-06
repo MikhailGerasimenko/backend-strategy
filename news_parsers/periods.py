@@ -96,7 +96,11 @@ def filter_items_by_period(items: list[NewsItem], period_range: PeriodRange) -> 
             filtered.append(item)
             continue
         item_date = parse_item_date(item.date)
-        if item_date is None or period_range.contains(item_date):
+        # Без даты не тащим в дневной прогон — иначе старые RSS-новости
+        # каждый день попадали бы в индекс с датой прогона.
+        if item_date is None:
+            continue
+        if period_range.contains(item_date):
             filtered.append(item)
     return filtered
 
@@ -108,9 +112,13 @@ def parse_iso_date(value: str) -> date:
 def parse_item_date(value: str) -> date | None:
     if not value:
         return None
+    from .dates import normalize_date
+
+    normalized = normalize_date(value)
+    candidate = normalized or value
     for fmt in ("%d.%m.%Y", "%Y-%m-%d"):
         try:
-            return datetime.strptime(value, fmt).date()
+            return datetime.strptime(candidate, fmt).date()
         except ValueError:
             continue
     return None

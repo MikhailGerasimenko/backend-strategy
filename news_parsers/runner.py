@@ -53,6 +53,12 @@ def load_sources(
         )
     if include_telegram:
         sources.extend(expand_telegram_sources(data, path.parent))
+    try:
+        from .disabled_sources import exclude_disabled
+
+        sources = exclude_disabled(sources)
+    except Exception:
+        pass
     return sources
 
 
@@ -155,7 +161,11 @@ def run_all_sources(
             )
     site_proxy = resolve_http_proxy()
     tg_proxy = resolve_telegram_proxy(telegram_proxy, telegram_cfg.get("proxy_url"))
-    client = HttpClient(timeout=timeout, retries=retries, proxy_url=site_proxy)
+    client = (
+        HttpClient(timeout=timeout, retries=retries, proxy_url=site_proxy)
+        if site_proxy
+        else HttpClient(timeout=timeout, retries=retries)
+    )
     telegram_client = (
         HttpClient(timeout=timeout, retries=retries, proxy_url=tg_proxy)
         if tg_proxy
@@ -163,7 +173,7 @@ def run_all_sources(
     )
     if site_proxy:
         print(f"HTTP proxy enabled: {mask_proxy_url(site_proxy)}", flush=True)
-    if tg_proxy and tg_proxy != site_proxy:
+    if tg_proxy:
         print(f"Telegram proxy enabled: {mask_proxy_url(tg_proxy)}", flush=True)
     period_range = build_period_range(period=period, since=since, until=until, days=days)
     all_items: list[NewsItem] = []
