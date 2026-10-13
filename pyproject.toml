@@ -15,7 +15,8 @@ dependencies = [
     "pytz (>=2025.2,<2026.0)",
     "opentelemetry-distro (>=0.48b0,<1.0.0)",
     "opentelemetry-exporter-otlp (>=1.28.0,<2.0.0)",
-    "opentelemetry-instrumentation-fastapi (>=0.48b0,<1.0.0)"
+    "opentelemetry-instrumentation-fastapi (>=0.48b0,<1.0.0)",
+    "anyio (>=4.14.2,<5.0.0)"
 ]
 
 
@@ -37,6 +38,10 @@ dev = [
 name = "corporate"
 url = "https://repo.severstal.severstalgroup.com/artifactory/api/pypi/pypi/simple"
 priority = "primary"
+
+[[tool.poetry.source]]
+name = "PyPI"
+priority = "supplemental"
 
 [tool.isort]
 line_length = 79
