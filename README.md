@@ -4,17 +4,17 @@ FastAPI-бэкенд «Стратегического навигатора» н�
 
 В контуре:
 
-- **векторы** → корпоративный Qdrant (`QDRANT_URL`), не pgvector
+- **векторы** → PostgreSQL + pgvector (`DATABASE_URL`), как в исходном проекте
 - **парсинг** → корп-прокси `http://ar-proxy.severstal.severstalgroup.com:3128`
 - **фронт** → отдельный репозиторий SPA
-- **секреты** → Vault/ESO (`OPENROUTER_API_KEY`, `AUTH_SECRET`, опционально `QDRANT_API_KEY`)
+- **секреты** → Vault/ESO (`DATABASE_URL`, `OPENROUTER_API_KEY`, `AUTH_SECRET`)
 
 ## Стек
 
 | Слой | Технология |
 |------|------------|
 | API | FastAPI + Gunicorn |
-| RAG | Qdrant (`rag_news`, `brief_index`) |
+| RAG | PostgreSQL + pgvector (`rag_news_*`, `brief_index_*`) |
 | LLM | OpenRouter |
 | Парсинг | requests через HTTP(S)_PROXY / PARSING_PROXY |
 | CI/CD | SSS `python.yml` |
@@ -26,7 +26,7 @@ FastAPI-бэкенд «Стратегического навигатора» н�
 poetry install --no-root
 pip install -r requirements-navigator.txt
 cp .env.example .env
-# задайте OPENROUTER_API_KEY и при необходимости QDRANT_URL
+# задайте DATABASE_URL и OPENROUTER_API_KEY
 make run
 # http://127.0.0.1:8000/api/v1/health
 # http://127.0.0.1:8000/login
@@ -37,7 +37,7 @@ make run
 См. `.env.example`. Ключевые:
 
 - `HTTP_PROXY` / `HTTPS_PROXY` / `PARSING_PROXY` — корп-прокси
-- `QDRANT_URL` — URL сервиса Qdrant в кластере
+- `DATABASE_URL` — корпоративный Postgres с pgvector
 - `OPENROUTER_API_KEY`, `AUTH_SECRET` — секреты
 
 ## Структура

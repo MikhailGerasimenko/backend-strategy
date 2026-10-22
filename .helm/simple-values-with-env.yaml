@@ -25,8 +25,6 @@ deployment:
       value: "localhost,127.0.0.1,.severstal.severstalgroup.com,.severstalgroup.com"
     - name: TZ
       value: "Europe/Moscow"
-    - name: QDRANT_URL
-      value: "http://qdrant:6333"
   resources:
     limits:
       memory: 2Gi

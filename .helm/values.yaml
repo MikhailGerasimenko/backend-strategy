@@ -102,10 +102,8 @@ deployment:
       value: "localhost,127.0.0.1,.severstal.severstalgroup.com,.severstalgroup.com"
     - name: TZ
       value: "Europe/Moscow"
-    # Подставьте DNS сервиса Qdrant из проекта db (namespace/сервис)
-    - name: QDRANT_URL
-      value: "http://qdrant:6333"
-    # OPENROUTER_API_KEY / AUTH_SECRET / QDRANT_API_KEY — через Vault secrets
+    # DATABASE_URL / OPENROUTER_API_KEY / AUTH_SECRET — через Vault.
+    # Векторы: Postgres + pgvector, как в исходном проекте. QDRANT_URL не задаём.
 
   # -- Additional annotations for deployment
   annotations: {}
