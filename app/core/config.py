@@ -33,6 +33,12 @@ class Settings(BaseSettings):
 
     auth_secret: str = ""
 
+    # S3: операционные файлы и архив новостей старше года
+    s3_endpoint: str = ""
+    s3_files_bucket: str = ""
+    s3_archive_bucket: str = ""
+    news_archive_after_days: int = 365
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -55,6 +61,10 @@ class Settings(BaseSettings):
             "EMBEDDING_DIMENSIONS": str(self.embedding_dimensions),
             "AUTH_SECRET": self.auth_secret,
             "TZ": self.time_zone,
+            "S3_ENDPOINT": self.s3_endpoint,
+            "S3_FILES_BUCKET": self.s3_files_bucket,
+            "S3_ARCHIVE_BUCKET": self.s3_archive_bucket,
+            "NEWS_ARCHIVE_AFTER_DAYS": str(self.news_archive_after_days),
         }
         for key, value in mapping.items():
             if value and not os.getenv(key, "").strip():

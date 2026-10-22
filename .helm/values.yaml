@@ -19,8 +19,8 @@ global:
 
 secrets:
   # -- Use external secrets or not
-  # Пока Vault-путь не заведён — иначе pod ждёт несуществующий Secret и деплой таймаутится
-  enabled: false
+  # Vault-путь заведён: vibecoders/strategic-navigator/backend/env/dev
+  enabled: true
 
   # -- Kind of external secret backend
   kind: "ClusterSecretStore"

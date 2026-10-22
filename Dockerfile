@@ -72,7 +72,7 @@ COPY config/ ./config/
 COPY news_parsers/ ./news_parsers/
 COPY web/ ./web/
 COPY sources.json telegram_channels.json keyword_blocks.json source_brief_categories.json ./
-COPY run_news_parsers.py run_web.py generate_brief.py index_news_rag.py ./
+COPY run_news_parsers.py run_web.py generate_brief.py index_news_rag.py archive_old_news.py ./
 COPY Новости/.gitkeep ./Новости/
 
 ENV PYTHONUNBUFFERED=1 \
