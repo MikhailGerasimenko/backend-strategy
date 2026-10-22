@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     auth_secret: str = ""
 
     # S3: операционные файлы и архив новостей старше года
-    s3_endpoint: str = ""
+    s3_endpoint: str = "https://s3data.severstal.severstalgroup.com"
     s3_files_bucket: str = ""
     s3_archive_bucket: str = ""
     news_archive_after_days: int = 365

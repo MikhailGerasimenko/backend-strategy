@@ -46,10 +46,7 @@ def load_storage_settings() -> ObjectStorageSettings:
 
 def _client(settings: ObjectStorageSettings, bucket: BucketConfig):
     if not settings.endpoint:
-        raise RuntimeError(
-            "S3_ENDPOINT не задан. Эндпоинт бакетов в письме с ключами не пришёл — "
-            "его нужно запросить у тех, кто выдал бакеты."
-        )
+        raise RuntimeError("S3_ENDPOINT не задан.")
     try:
         import boto3
         from botocore.client import Config
