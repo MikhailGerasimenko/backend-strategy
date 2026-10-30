@@ -318,7 +318,7 @@ def _resolve_override_prompt_text(body: PromptOverrideBody) -> str:
 
 
 @app.get("/sources")
-async def custom_sources_page(request: Request, user: dict = Depends(require_user)) -> FileResponse:
+async def custom_sources_page(request: Request, user: dict = Depends(require_admin)) -> FileResponse:
     response = FileResponse(STATIC_DIR / "sources.html")
     response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
     return response
@@ -550,7 +550,7 @@ async def reset_weekly_cleanup_prompt(
 
 
 @app.get("/api/weekly/map-prompt")
-async def weekly_map_prompt(user: dict = Depends(require_user)) -> dict:
+async def weekly_map_prompt(user: dict = Depends(require_admin)) -> dict:
     prompt, customized = resolve_prompt(
         "weekly",
         str(user.get("login") or ""),
@@ -563,7 +563,7 @@ async def weekly_map_prompt(user: dict = Depends(require_user)) -> dict:
 @app.post("/api/weekly/map-prompt")
 async def save_weekly_map_prompt(
     body: PromptOverrideBody,
-    user: dict = Depends(require_user),
+    user: dict = Depends(require_admin),
 ) -> dict:
     try:
         prompt = _resolve_override_prompt_text(body)
@@ -580,13 +580,13 @@ async def save_weekly_map_prompt(
 
 
 @app.delete("/api/weekly/map-prompt")
-async def reset_weekly_map_prompt(user: dict = Depends(require_user)) -> dict:
+async def reset_weekly_map_prompt(user: dict = Depends(require_admin)) -> dict:
     removed = clear_prompt_override("weekly", str(user.get("login") or ""), MAP_PROMPT_VARIANT)
     return {"ok": True, "variant": MAP_PROMPT_VARIANT, "customized": False, "removed": removed}
 
 
 @app.get("/api/weekly/reduce-prompt")
-async def weekly_reduce_prompt(user: dict = Depends(require_user)) -> dict:
+async def weekly_reduce_prompt(user: dict = Depends(require_admin)) -> dict:
     prompt, customized = resolve_prompt(
         "weekly",
         str(user.get("login") or ""),
@@ -599,7 +599,7 @@ async def weekly_reduce_prompt(user: dict = Depends(require_user)) -> dict:
 @app.post("/api/weekly/reduce-prompt")
 async def save_weekly_reduce_prompt(
     body: PromptOverrideBody,
-    user: dict = Depends(require_user),
+    user: dict = Depends(require_admin),
 ) -> dict:
     try:
         prompt = _resolve_override_prompt_text(body)
@@ -616,7 +616,7 @@ async def save_weekly_reduce_prompt(
 
 
 @app.delete("/api/weekly/reduce-prompt")
-async def reset_weekly_reduce_prompt(user: dict = Depends(require_user)) -> dict:
+async def reset_weekly_reduce_prompt(user: dict = Depends(require_admin)) -> dict:
     removed = clear_prompt_override("weekly", str(user.get("login") or ""), REDUCE_PROMPT_VARIANT)
     return {"ok": True, "variant": REDUCE_PROMPT_VARIANT, "customized": False, "removed": removed}
 
@@ -648,7 +648,7 @@ async def api_rag_period_coverage(
 async def api_rag_list_attachments(
     period_start: Optional[str] = None,
     period_end: Optional[str] = None,
-    user: dict = Depends(require_user),
+    user: dict = Depends(require_admin),
 ) -> dict:
     start = _parse_day(period_start) if period_start and period_start.strip() else None
     end = _parse_day(period_end) if period_end and period_end.strip() else None
@@ -658,7 +658,7 @@ async def api_rag_list_attachments(
 @app.delete("/api/rag/attachments/{document_id}")
 async def api_rag_delete_attachment(
     document_id: int,
-    user: dict = Depends(require_user),
+    user: dict = Depends(require_admin),
 ) -> dict:
     if not pgvector_configured():
         raise HTTPException(status_code=503, detail="DATABASE_URL не задан.")
@@ -671,7 +671,7 @@ async def api_rag_delete_attachment(
 
 
 @app.get("/api/custom-sources")
-async def api_list_custom_sources(user: dict = Depends(require_user)) -> dict:
+async def api_list_custom_sources(user: dict = Depends(require_admin)) -> dict:
     managed = list_managed_sources()
     return {
         "channels": list_custom_channels(),
@@ -684,7 +684,7 @@ async def api_list_custom_sources(user: dict = Depends(require_user)) -> dict:
 @app.post("/api/managed-sources/disable")
 async def api_disable_managed_source(
     body: ManagedSourceBody,
-    user: dict = Depends(require_user),
+    user: dict = Depends(require_admin),
 ) -> dict:
     try:
         row = disable_managed_source(
@@ -699,7 +699,7 @@ async def api_disable_managed_source(
 @app.post("/api/managed-sources/restore")
 async def api_restore_managed_source(
     body: ManagedSourceBody,
-    user: dict = Depends(require_user),
+    user: dict = Depends(require_admin),
 ) -> dict:
     try:
         row = restore_managed_source(
@@ -714,7 +714,7 @@ async def api_restore_managed_source(
 @app.post("/api/custom-sources")
 async def api_add_custom_source(
     body: CustomTelegramSourceBody,
-    user: dict = Depends(require_user),
+    user: dict = Depends(require_admin),
 ) -> dict:
     try:
         row = add_custom_channel(
@@ -747,7 +747,7 @@ async def api_add_custom_source(
 @app.delete("/api/custom-sources/{channel}")
 async def api_delete_custom_source(
     channel: str,
-    user: dict = Depends(require_user),
+    user: dict = Depends(require_admin),
 ) -> dict:
     try:
         username = parse_telegram_channel(channel)
@@ -764,7 +764,7 @@ async def api_delete_custom_source(
 async def api_parse_custom_source(
     channel: str,
     date_str: Optional[str] = None,
-    user: dict = Depends(require_user),
+    user: dict = Depends(require_admin),
 ) -> dict:
     try:
         username = parse_telegram_channel(channel)
@@ -840,7 +840,7 @@ async def api_rag_upload_document(
     document_type: str = Form(""),
     title: str = Form(""),
     file: UploadFile = File(...),
-    user: dict = Depends(require_user),
+    user: dict = Depends(require_admin),
 ) -> dict:
     if not pgvector_configured():
         raise HTTPException(status_code=503, detail="DATABASE_URL не задан.")
@@ -881,7 +881,7 @@ async def api_rag_upload_documents(
     period_end: str = Form(""),
     document_type: str = Form(""),
     files: list[UploadFile] = File(...),
-    user: dict = Depends(require_user),
+    user: dict = Depends(require_admin),
 ) -> dict:
     if not pgvector_configured():
         raise HTTPException(status_code=503, detail="DATABASE_URL не задан.")
@@ -922,7 +922,7 @@ async def api_rag_upload_pdf(
     brief_kind: str = Form("full"),
     title: str = Form(""),
     file: UploadFile = File(...),
-    user: dict = Depends(require_user),
+    user: dict = Depends(require_admin),
 ) -> dict:
     if not pgvector_configured():
         raise HTTPException(status_code=503, detail="DATABASE_URL не задан.")
@@ -1033,7 +1033,7 @@ async def api_kallanish_upload(
 @app.post("/api/rag/reindex-kallanish")
 async def api_rag_reindex_kallanish(
     date_str: str = Form(""),
-    user: dict = Depends(require_user),
+    user: dict = Depends(require_admin),
 ) -> dict:
     if not pgvector_configured():
         raise HTTPException(status_code=503, detail="DATABASE_URL не задан.")
@@ -1383,12 +1383,17 @@ async def start_weekly_brief(
     start = _parse_day(body.period_start)
     end = _parse_day(body.period_end)
     login = str(user.get("login") or "")
-    map_system_prompt = (body.map_system_prompt or "").strip() or get_prompt_override(
-        "weekly", login, MAP_PROMPT_VARIANT
-    )
-    reduce_instructions = (body.reduce_instructions or "").strip() or get_prompt_override(
-        "weekly", login, REDUCE_PROMPT_VARIANT
-    )
+    # Пользователь не видит фактограф/склейку — для него только серверные дефолты.
+    if user.get("is_admin"):
+        map_system_prompt = (body.map_system_prompt or "").strip() or get_prompt_override(
+            "weekly", login, MAP_PROMPT_VARIANT
+        )
+        reduce_instructions = (body.reduce_instructions or "").strip() or get_prompt_override(
+            "weekly", login, REDUCE_PROMPT_VARIANT
+        )
+    else:
+        map_system_prompt = None
+        reduce_instructions = None
 
     def work(job) -> None:
         # None = все новости; [] = новости не брать (только документы RAG).
