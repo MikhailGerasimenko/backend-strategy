@@ -1058,7 +1058,7 @@ async def get_job(job_id: str, user: dict = Depends(require_user)) -> dict:
 
 
 @app.get("/api/jobs/{job_id}/map-digests")
-async def list_job_map_digests(job_id: str, user: dict = Depends(require_user)) -> dict:
+async def list_job_map_digests(job_id: str, user: dict = Depends(require_admin)) -> dict:
     """Сводка по map-батчам брифа (без текста дайджестов)."""
     job = job_manager.get(job_id)
     if not job:
@@ -1073,7 +1073,7 @@ async def list_job_map_digests(job_id: str, user: dict = Depends(require_user)) 
 
 @app.get("/api/jobs/{job_id}/map-digests.docx")
 async def download_job_map_digests(
-    job_id: str, user: dict = Depends(require_user)
+    job_id: str, user: dict = Depends(require_admin)
 ) -> Response:
     """Все дайджесты фактографа одним Word."""
     job = job_manager.get(job_id)
@@ -1120,7 +1120,7 @@ async def download_job_map_digests(
 
 @app.get("/api/jobs/{job_id}/map-digests/{index}")
 async def get_job_map_digest(
-    job_id: str, index: int, user: dict = Depends(require_user)
+    job_id: str, index: int, user: dict = Depends(require_admin)
 ) -> dict:
     """Полный текст дайджеста одного map-батча (index — с 1)."""
     job = job_manager.get(job_id)
@@ -1383,8 +1383,9 @@ async def start_weekly_brief(
     start = _parse_day(body.period_start)
     end = _parse_day(body.period_end)
     login = str(user.get("login") or "")
-    # Пользователь не видит фактограф/склейку — для него только серверные дефолты.
-    if user.get("is_admin"):
+    is_admin = bool(user.get("is_admin"))
+    # Пользователь не видит фактограф/склейку/документы — только серверные дефолты map/reduce.
+    if is_admin:
         map_system_prompt = (body.map_system_prompt or "").strip() or get_prompt_override(
             "weekly", login, MAP_PROMPT_VARIANT
         )
@@ -1406,7 +1407,9 @@ async def start_weekly_brief(
                 for s in body.sources
                 if s and s.strip() and s.strip() not in doc_source_names
             ]
-        if body.attachment_ids is None:
+        if not is_admin:
+            selected_attachments = []
+        elif body.attachment_ids is None:
             selected_attachments = None
         else:
             selected_attachments = [int(i) for i in body.attachment_ids if int(i) > 0]
