@@ -787,8 +787,9 @@ def list_attachment_documents(
     period_start: date | None = None,
     period_end: date | None = None,
 ) -> list[dict[str, Any]]:
-    repair_misclassified_attachments(database_url)
-    backfill_kallanish_catalog(database_url)
+    # Как в MVP: repair/backfill НЕ вызываем на каждый list.
+    # На большой базе Kallanish backfill блокировал period-coverage / attachments / agent.
+    # Каталог обновляется при индексации (upsert_kallanish_catalog_document).
 
     params: list[Any] = [list(ATTACHMENT_SOURCE_TYPES)]
     where = "d.source_type = ANY(%s)"
@@ -825,7 +826,7 @@ def list_attachment_documents(
         articles_count = int(row[10] or 0)
         catalog_only = bool(row[11])
         document_type = str(row[3] or "")
-        # Kallanish в библиотеке — catalog_only без brief_index_chunks; UI ждёт число статей.
+        # Kallanish catalog_only: в brief_index_chunks пусто, число статей в metadata.
         display_chunks = (
             articles_count
             if (catalog_only or document_type == "Kallanish") and articles_count > 0

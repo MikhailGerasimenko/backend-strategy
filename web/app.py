@@ -630,12 +630,18 @@ async def api_rag_period_coverage(
     user: dict = Depends(require_user),
 ) -> dict:
     selected = [s.strip() for s in (sources or "").split(",") if s.strip()] or None
-    return rag_period_coverage(
-        _parse_day(period_start),
-        _parse_day(period_end),
-        brief_kind,
-        sources=selected,
-    )
+    try:
+        return rag_period_coverage(
+            _parse_day(period_start),
+            _parse_day(period_end),
+            brief_kind,
+            sources=selected,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Ошибка проверки индекса: {type(exc).__name__}: {exc}",
+        ) from exc
 
 
 @app.get("/api/rag/attachments")
@@ -781,7 +787,13 @@ async def api_rag_period_sources(
     period_end: str,
     user: dict = Depends(require_user),
 ) -> dict:
-    return list_brief_news_sources(_parse_day(period_start), _parse_day(period_end))
+    try:
+        return list_brief_news_sources(_parse_day(period_start), _parse_day(period_end))
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Ошибка списка источников: {type(exc).__name__}: {exc}",
+        ) from exc
 
 
 @app.get("/api/agent/default-prompt")
@@ -849,7 +861,7 @@ async def api_rag_upload_document(
         )
     except DuplicateDocumentError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    except (ValueError, BriefIndexError) as exc:
+    except (ValueError, BriefIndexError, FileNotFoundError) as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except OpenRouterError as exc:
         raise HTTPException(
