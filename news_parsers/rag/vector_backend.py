@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import os
 from datetime import date
 from pathlib import Path
 from typing import Any, Iterable, Sequence
@@ -32,8 +33,17 @@ from .store import (
 
 
 def vector_backend() -> str:
-    """Активный стор: ``qdrant`` при QDRANT_URL, иначе ``pgvector``."""
-    return "qdrant" if qdrant_configured() else "pgvector"
+    """Активный стор.
+
+    В контуре основной вариант — Postgres + pgvector (`DATABASE_URL` из Vault).
+    `QDRANT_URL` используем только если Postgres не задан: иначе при «залипшем»
+    QDRANT_URL в Helm загрузка документов и period-sources падают с 500.
+    """
+    if os.getenv("DATABASE_URL", "").strip():
+        return "pgvector"
+    if qdrant_configured():
+        return "qdrant"
+    return "pgvector"
 
 
 def uses_qdrant() -> bool:

@@ -19,7 +19,7 @@ global:
 
 secrets:
   # -- Use external secrets or not
-  # Vault-путь заведён: vibecoders/strategic-navigator/backend/env/dev
+  # AUTH_SECRET (случайная строка от 32 символов) должен быть заполнен в Vault до деплоя.
   enabled: true
 
   # -- Kind of external secret backend
@@ -92,6 +92,24 @@ deployment:
 
   # -- Fixed Environment variable
   env:
+    - name: AUTH_PROVIDER
+      value: "keycloak"
+    - name: KEYCLOAK_URL
+      value: "https://sso-id-test-int.severstal.com"
+    - name: KEYCLOAK_REALM
+      value: "common"
+    - name: KEYCLOAK_CLIENT_ID
+      value: "strategic_navigator"
+    - name: KEYCLOAK_PUBLIC_URL
+      value: "https://frontend-dev.sss-ti.kube.severstal.severstalgroup.com"
+    - name: KEYCLOAK_ADMIN_ROLE
+      value: "Strategic-Navigator_Admins"
+    - name: KEYCLOAK_USER_ROLE
+      value: "Strategic-Navigator_Users_Test"
+    - name: KEYCLOAK_CA_BUNDLE
+      value: "/etc/ssl/certs/ca-certificates.crt"
+    - name: AUTH_COOKIE_SECURE
+      value: "true"
     - name: HTTP_PROXY
       value: "http://ar-proxy.severstal.severstalgroup.com:3128"
     - name: HTTPS_PROXY
@@ -99,23 +117,13 @@ deployment:
     - name: PARSING_PROXY
       value: "http://ar-proxy.severstal.severstalgroup.com:3128"
     - name: NO_PROXY
-      value: "localhost,127.0.0.1,.severstal.severstalgroup.com,.severstalgroup.com"
+      value: "localhost,127.0.0.1,.severstal.severstalgroup.com,.severstalgroup.com,sso-id-test-int.severstal.com"
     - name: TZ
       value: "Europe/Moscow"
-    - name: S3_ENDPOINT
-      value: "https://s3data.severstal.severstalgroup.com"
-    - name: S3_REGION
-      value: "us-east-1"
-    - name: S3_ADDRESSING_STYLE
-      value: "path"
-    - name: S3_FILES_BUCKET
-      value: "strategic-navigator-files-test"
-    - name: S3_ARCHIVE_BUCKET
-      value: "strategic-navigator-archive-test"
-    - name: NEWS_ARCHIVE_AFTER_DAYS
-      value: "365"
-    # DATABASE_URL / OPENROUTER_API_KEY / AUTH_SECRET / S3_*_ACCESS_KEY / S3_*_SECRET_KEY — через Vault.
-    # Векторы: Postgres + pgvector. QDRANT_URL не задаём.
+    # RAG: Postgres + pgvector через DATABASE_URL из Vault.
+    # Не задаём QDRANT_URL — иначе бэкенд уходит в Qdrant и /api/rag/period-sources падает,
+    # а UI показывает пустой список источников.
+    # OPENROUTER_API_KEY / AUTH_SECRET / DATABASE_URL / S3_* — через Vault secrets
 
   # -- Additional annotations for deployment
   annotations: {}

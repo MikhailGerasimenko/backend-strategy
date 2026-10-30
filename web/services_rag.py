@@ -259,11 +259,20 @@ def index_document_upload(
 
     document_type = resolve_attachment_document_type(safe_name, document_type)
 
-    reports_dir = NEWS_DIR / "reports"
-    reports_dir.mkdir(parents=True, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    path = reports_dir / f"{brief_date.strftime('%Y%m%d')}_{stamp}_{safe_name}"
-    path.write_bytes(content)
+    stored_name = f"{brief_date.strftime('%Y%m%d')}_{stamp}_{safe_name}"
+    reports_dir = NEWS_DIR / "reports"
+    try:
+        reports_dir.mkdir(parents=True, exist_ok=True)
+        path = reports_dir / stored_name
+        path.write_bytes(content)
+    except OSError:
+        # В k8s корень часто read-only — пишем во временный каталог.
+        import tempfile
+
+        tmp_dir = Path(tempfile.mkdtemp(prefix="navigator-reports-"))
+        path = tmp_dir / stored_name
+        path.write_bytes(content)
 
     if log:
         log(f"Документ сохранён: {path.name}")
@@ -428,10 +437,14 @@ def list_brief_news_sources(period_start: date, period_end: date) -> dict[str, A
     }
     counts: dict[str, int] = {}
     if pgvector_configured():
-        for row in list_period_news_sources(
-            database_url(), period_start=period_start, period_end=period_end
-        ):
-            counts[row["name"]] = int(row["count"])
+        try:
+            for row in list_period_news_sources(
+                database_url(), period_start=period_start, period_end=period_end
+            ):
+                counts[row["name"]] = int(row["count"])
+        except Exception as exc:
+            # Конфиг источников всё равно отдаём (счётчики = 0), иначе UI пустой.
+            print(f"period-sources counts unavailable: {exc}", flush=True)
 
     custom_meta: dict[str, dict[str, Any]] = {}
     try:
@@ -517,7 +530,8 @@ def list_brief_news_sources(period_start: date, period_end: date) -> dict[str, A
                     pmi_count += 1
                 else:
                     pdf_count += 1
-        except Exception:
+        except Exception as exc:
+            print(f"period-sources attachments unavailable: {exc}", flush=True)
             pdf_count = 0
             pmi_count = 0
 

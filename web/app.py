@@ -38,7 +38,10 @@ from .auth import (
     register_and_login,
     require_admin,
     require_user,
+    require_local_auth,
+    keycloak_enabled,
 )
+from .keycloak import router as keycloak_router, logout_response
 from .config import STATIC_DIR, default_model, openrouter_configured
 from .jobs import job_manager
 from .prompt_overrides import (
@@ -96,6 +99,7 @@ app = FastAPI(
 )
 
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+app.include_router(keycloak_router)
 
 PUBLIC_PAGES = {"/login", "/register"}
 PUBLIC_API_PREFIXES = ("/api/auth", "/api/v1/health")
@@ -235,11 +239,15 @@ def _yesterday_msk() -> date:
 async def login_page(request: Request) -> FileResponse:
     if get_session_user(request):
         return RedirectResponse(url="/", status_code=303)
+    if keycloak_enabled():
+        return FileResponse(STATIC_DIR / "sso.html")
     return FileResponse(STATIC_DIR / "login.html")
 
 
 @app.get("/register")
 async def register_page(request: Request) -> FileResponse:
+    if keycloak_enabled():
+        return RedirectResponse("/login", status_code=303)
     if get_session_user(request):
         return RedirectResponse(url="/", status_code=303)
     return FileResponse(STATIC_DIR / "register.html")
@@ -343,7 +351,9 @@ async def api_login(body: LoginBody, request: Request) -> dict:
 
 
 @app.post("/api/auth/logout")
-async def api_logout(request: Request) -> dict:
+async def api_logout(request: Request):
+    if keycloak_enabled():
+        return await logout_response(request)
     clear_session_user(request)
     return {"ok": True}
 
@@ -355,11 +365,13 @@ async def api_me(user: dict = Depends(require_user)) -> dict:
 
 @app.get("/api/auth/check-login")
 async def api_check_login(login: str) -> dict:
+    require_local_auth()
     return registration_status(login)
 
 
 @app.get("/api/auth/accounts-overview")
 async def api_accounts_overview() -> dict:
+    require_local_auth()
     from .user_store import list_allowed_accounts, registration_status
 
     accounts = []
@@ -844,6 +856,11 @@ async def api_rag_upload_document(
             status_code=503,
             detail=f"Ошибка эмбеддингов (OpenRouter): {exc}",
         ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Ошибка индексации документа: {type(exc).__name__}: {exc}",
+        ) from exc
 
 
 @app.post("/api/rag/upload-documents")
@@ -879,6 +896,11 @@ async def api_rag_upload_documents(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Ошибка пакетной индексации: {type(exc).__name__}: {exc}",
+        ) from exc
 
 
 @app.post("/api/rag/upload-pdf")
