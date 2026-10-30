@@ -72,8 +72,10 @@ COPY config/ ./config/
 COPY news_parsers/ ./news_parsers/
 COPY web/ ./web/
 COPY sources.json telegram_channels.json keyword_blocks.json source_brief_categories.json ./
-COPY run_news_parsers.py run_web.py generate_brief.py index_news_rag.py archive_old_news.py ./
+COPY run_news_parsers.py run_web.py generate_brief.py index_news_rag.py ./
+COPY scripts/ ./scripts/
 COPY Новости/.gitkeep ./Новости/
+RUN chmod +x /app/scripts/daily-parse-incontainer.sh
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
@@ -82,7 +84,7 @@ ENV PYTHONUNBUFFERED=1 \
     HTTP_PROXY=http://ar-proxy.severstal.severstalgroup.com:3128 \
     HTTPS_PROXY=http://ar-proxy.severstal.severstalgroup.com:3128 \
     PARSING_PROXY=http://ar-proxy.severstal.severstalgroup.com:3128 \
-    NO_PROXY=localhost,127.0.0.1,.severstal.severstalgroup.com,.severstalgroup.com \
+    NO_PROXY=localhost,127.0.0.1,.severstal.severstalgroup.com,.severstalgroup.com,sso-id-test-int.severstal.com \
     TZ=Europe/Moscow
 
 ENV OTEL_METRICS_EXPORTER=none \

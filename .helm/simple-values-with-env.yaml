@@ -6,7 +6,8 @@ global:
     tag: 1.13
 
 secrets:
-  enabled: false
+  # Нужен для CronJob парсера: DATABASE_URL + OPENROUTER/EMBEDDING_* из Vault
+  enabled: true
   projectNamespace: "$CI_PROJECT_NAMESPACE"
   backend: "eso-vault-backend"
 
@@ -41,6 +42,40 @@ service:
     port: 8000
     targetPort: 8000
     protocol: TCP
+
+cronjob:
+  enabled: true
+  schedule: "30 0 * * *"
+  timeZone: "Europe/Moscow"
+  command:
+    - /app/scripts/daily-parse-incontainer.sh
+  env:
+    - name: TZ
+      value: "Europe/Moscow"
+    - name: NAV_TZ
+      value: "Europe/Moscow"
+    - name: SYNC_NEWS_TO_SERVER
+      value: "false"
+    - name: HTTP_PROXY
+      value: "http://ar-proxy.severstal.severstalgroup.com:3128"
+    - name: HTTPS_PROXY
+      value: "http://ar-proxy.severstal.severstalgroup.com:3128"
+    - name: PARSING_PROXY
+      value: "http://ar-proxy.severstal.severstalgroup.com:3128"
+    - name: NO_PROXY
+      value: "localhost,127.0.0.1,.severstal.severstalgroup.com,.severstalgroup.com,sso-id-test-int.severstal.com"
+  resources:
+    limits:
+      memory: 2Gi
+      cpu: 2
+    requests:
+      memory: 512Mi
+      cpu: 0.25
+  tolerations:
+  - key: "client-cluster"
+    operator: "equal"
+    value: "sales-supply"
+    effect: "NoSchedule"
 
 ingress:
   -

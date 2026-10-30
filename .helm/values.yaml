@@ -511,28 +511,29 @@ job:
 
 cronjob:
 
-  # -- Enable CronJob
-  enabled: false
+  # -- Enable CronJob: nightly news parse + RAG index at 00:30 Europe/Moscow
+  enabled: true
 
   # -- CronJob additional labels
   additionalLabels: {}
-    # key1: value1
 
   # -- CronJob annotations
   annotations: {}
-    # key112: value112
 
-  # -- CronJob schedule
-  schedule: "* * * * *"
+  # -- CronJob schedule (with timeZone below → 00:30 МСК)
+  schedule: "30 0 * * *"
+
+  # -- IANA timezone for schedule (K8s >= 1.27). Without it cron is UTC.
+  timeZone: "Europe/Moscow"
 
   # -- (int) CronJob startingDeadlineSeconds
-  startingDeadlineSeconds: ""
+  startingDeadlineSeconds: 600
 
   # -- (int) CronJob successfulJobsHistoryLimit
-  successfulJobsHistoryLimit: ""
+  successfulJobsHistoryLimit: 3
 
   # -- (int) CronJob failedJobsHistoryLimit
-  failedJobsHistoryLimit: ""
+  failedJobsHistoryLimit: 5
 
   # -- CronJob suspend
   suspend: false
@@ -544,100 +545,77 @@ cronjob:
   completions: ""
 
   # -- (int) CronJob backoffLimit
-  backoffLimit: ""
+  backoffLimit: 1
 
-  # -- (int) CronJob activeDeadlineSeconds
-  activeDeadlineSeconds: ""
+  # -- (int) CronJob activeDeadlineSeconds (парсинг + эмбеддинги могут идти долго)
+  activeDeadlineSeconds: 7200
 
-  # -- (int) CronJob parallelism ttlSecondsAfterFinished. Working on Kubernetes >= v1.23
-  ttlSecondsAfterFinished: ""
+  # -- (int) CronJob ttlSecondsAfterFinished
+  ttlSecondsAfterFinished: 86400
 
   # -- CronJob restart policy
   restartPolicy: Never
 
-  # image:
-
-  #   # -- CronJob container registry image path. Overwrites global.image.repository parameter
-  #   repository: docker.repo.severstal.severstalgroup.com/nginx
-
-  #   # -- CronJob container registry image tag. Overwrites global.image.tag parameter
-  #   tag: 1.21
-
-  # -- CronJob image pull policy. Overwrites global.imagepullpolicy
+  # -- CronJob image pull policy
   imagePullPolicy: IfNotPresent
 
-  # -- CronJob command to run
-  command: ['sh', '-c', 'whoami']
+  # -- CronJob command: вчера по МСК, без MetalInfo, индекс в pgvector
+  command:
+    - /app/scripts/daily-parse-incontainer.sh
 
-  # -- Fixed Environment variable
-  env: []
-  # - name: DOTNET_CLI_TELEMETRY_OPTOUT
-  #   value: "1"
-  # - name: DOTNET_USE_POLLING_FILE_WATCHER
-  #   value: "1"
+  # -- Fixed Environment variable (прокси + TZ; DATABASE_URL/OPENROUTER_* — из Vault secret)
+  env:
+    - name: TZ
+      value: "Europe/Moscow"
+    - name: NAV_TZ
+      value: "Europe/Moscow"
+    - name: SYNC_NEWS_TO_SERVER
+      value: "false"
+    - name: HTTP_PROXY
+      value: "http://ar-proxy.severstal.severstalgroup.com:3128"
+    - name: HTTPS_PROXY
+      value: "http://ar-proxy.severstal.severstalgroup.com:3128"
+    - name: PARSING_PROXY
+      value: "http://ar-proxy.severstal.severstalgroup.com:3128"
+    - name: NO_PROXY
+      value: "localhost,127.0.0.1,.severstal.severstalgroup.com,.severstalgroup.com,sso-id-test-int.severstal.com"
 
   # -- CronJob resources
-  resources: {}
-    # limits:
-    #   memory: 256Mi
-    #   cpu: 0.5
-    # requests:
-    #   memory: 128Mi
-    #   cpu: 0.1
+  resources:
+    limits:
+      memory: 2Gi
+      cpu: 2
+    requests:
+      memory: 512Mi
+      cpu: 0.25
 
   # -- CronJob security context
   securityContext: {}
-    # runAsUser: 10000
-    # runAsGroup: 10000
 
   # -- CronJob container security context
   containerSecurityContext: {}
-    # runAsUser: 10000
-    # runAsGroup: 10000
 
-  # -- CronJob tolerations
-  tolerations: []
-  # - key: "client-cluster"
-  #   operator: "Equal"
-  #   value: "sales-supply"
-  #   effect: "NoSchedule"
+  # -- CronJob tolerations (как у deployment)
+  tolerations:
+  - key: "client-cluster"
+    operator: "equal"
+    value: "sales-supply"
+    effect: "NoSchedule"
 
   # -- CronJob node selector
   nodeSelector: {}
-    # kubernetes.io/hostname: k8s-test-int11
 
   # -- CronJob affinity
   affinity: {}
-    # nodeAffinity:
-    #   requiredDuringSchedulingIgnoredDuringExecution:
-    #     nodeSelectorTerms:
-    #     - matchExpressions:
-    #       - key: kubernetes.io/hostname
-    #         operator: In
-    #         values:
-    #         - k8s-test-int11
 
-  # -- CronJob additional env. Mount env of any configMap or secret wich were created manually
+  # -- CronJob additional env
   additionalEnvFrom: {}
-    # configMap:
-    #   - additional-configmap-1
-    #   - additional-configmap-2
-    # secret:
-    #   - additional-secret-1
 
-  # -- CronJob additional mounts. Mount configMap or secret wich were created manually as file into container
+  # -- CronJob additional PVC
   additionalPVC: []
-    # - name: additional-pvc-1
-    #   mountPath: /tmp/data
 
-  # -- CronJob additional PVC. Mount PVC wich was created manually into container
+  # -- CronJob additional mounts
   additionalMounts: {}
-    # configMap:
-    #   - name: additional-configmap-asdasdasda1
-    #     mountPath: /tmp/additional-configmap-1
-    # secret:
-    #   - name: additional-secret-1
-    #     mountPath: /tmp/additional-configmap-1
 
 rbac:
 

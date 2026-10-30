@@ -20,12 +20,21 @@ metadata:
   name: {{ $fullName }}-cronjob
 spec:
   schedule: {{ .Values.cronjob.schedule | quote }}
+  {{- if .Values.cronjob.timeZone }}
+  timeZone: {{ .Values.cronjob.timeZone | quote }}
+  {{- end }}
+  {{- if .Values.cronjob.startingDeadlineSeconds }}
+  startingDeadlineSeconds: {{ .Values.cronjob.startingDeadlineSeconds }}
+  {{- end }}
   {{- if .Values.cronjob.successfulJobsHistoryLimit }}
   successfulJobsHistoryLimit: {{ .Values.cronjob.successfulJobsHistoryLimit }}
   {{- end }}
   concurrencyPolicy: {{ .Values.cronjob.concurrencyPolicy | default "Forbid" }}
   {{- if .Values.cronjob.failedJobsHistoryLimit }}
   failedJobsHistoryLimit: {{ .Values.cronjob.failedJobsHistoryLimit }}
+  {{- end }}
+  {{- if .Values.cronjob.suspend }}
+  suspend: {{ .Values.cronjob.suspend }}
   {{- end }}
   jobTemplate:
     spec:

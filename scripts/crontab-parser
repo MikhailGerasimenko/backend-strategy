@@ -1,0 +1,4 @@
+# Strategic Navigator — автопарсинг + RAG
+# Контейнер parser: TZ=Europe/Moscow (см. docker-compose).
+# 00:30 МСК каждый день → вчерашний день (скрипт считает yesterday).
+30 0 * * * /app/scripts/daily-parse-incontainer.sh
