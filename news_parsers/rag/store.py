@@ -819,23 +819,35 @@ def list_attachment_documents(
             )
             rows = cur.fetchall()
 
-    return [
-        {
-            "id": int(row[0]),
-            "brief_date": row[1].isoformat(),
-            "period_end": row[2].isoformat() if row[2] else row[1].isoformat(),
-            "document_type": str(row[3] or ""),
-            "source_type": str(row[4] or ""),
-            "title": str(row[5] or ""),
-            "indexed_by": str(row[6] or ""),
-            "created_at": str(row[7] or ""),
-            "file_path": str(row[8] or ""),
-            "chunks": int(row[9] or 0),
-            "articles": int(row[10] or 0),
-            "catalog_only": bool(row[11]),
-        }
-        for row in rows
-    ]
+    result: list[dict[str, Any]] = []
+    for row in rows:
+        chunk_count = int(row[9] or 0)
+        articles_count = int(row[10] or 0)
+        catalog_only = bool(row[11])
+        document_type = str(row[3] or "")
+        # Kallanish в библиотеке — catalog_only без brief_index_chunks; UI ждёт число статей.
+        display_chunks = (
+            articles_count
+            if (catalog_only or document_type == "Kallanish") and articles_count > 0
+            else chunk_count
+        )
+        result.append(
+            {
+                "id": int(row[0]),
+                "brief_date": row[1].isoformat(),
+                "period_end": row[2].isoformat() if row[2] else row[1].isoformat(),
+                "document_type": document_type,
+                "source_type": str(row[4] or ""),
+                "title": str(row[5] or ""),
+                "indexed_by": str(row[6] or ""),
+                "created_at": str(row[7] or ""),
+                "file_path": str(row[8] or ""),
+                "chunks": display_chunks,
+                "articles": articles_count,
+                "catalog_only": catalog_only,
+            }
+        )
+    return result
 
 
 def repair_misclassified_attachments(database_url: str) -> int:

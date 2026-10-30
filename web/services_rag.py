@@ -174,14 +174,17 @@ def index_kallanish_articles_as_news(
         file_path=str(path),
         content_hash=hashlib.sha256(path.read_bytes()).hexdigest(),
     )
+    articles_count = len(items)
     return {
         "indexed": True,
         "storage": "news",
         "document_type": KALLANISH_SOURCE,
         "title": path.name,
-        "articles": len(items),
+        "articles": articles_count,
         "documents": int(result.get("documents") or 0),
-        "chunks": int(result.get("chunks") or 0),
+        # Для UI: у Kallanish показываем число статей, не embedding-чанков.
+        "chunks": articles_count,
+        "embedding_chunks": int(result.get("chunks") or 0),
         "brief_date": brief_date.isoformat(),
         "period_end": brief_date.isoformat(),
         "source": KALLANISH_SOURCE,

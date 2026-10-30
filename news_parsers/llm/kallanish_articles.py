@@ -14,11 +14,15 @@ from .kallanish_docx import extract_docx_plain_text
 
 KALLANISH_SOURCE = "Kallanish"
 
-# Маркер границы статьи в Word-рассылке: «09 сен 2026»
+# Маркер границы статьи: RU «09 сен 2026» или EN «25 Jun 2026»
 _DATE_LINE_RE = re.compile(
     r"^\d{1,2}\s+"
-    r"(янв(?:аря)?|фев(?:раля)?|мар(?:та)?|апр(?:еля)?|ма[йя]|июн(?:я)?|"
-    r"июл(?:я)?|авг(?:уста)?|сен(?:тября)?|окт(?:ября)?|ноя(?:бря)?|дек(?:абря)?)"
+    r"(?:"
+    r"янв(?:аря)?|фев(?:раля)?|мар(?:та)?|апр(?:еля)?|ма[йя]|июн(?:я)?|"
+    r"июл(?:я)?|авг(?:уста)?|сен(?:тября)?|окт(?:ября)?|ноя(?:бря)?|дек(?:абря)?|"
+    r"Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|"
+    r"Jul(?:y)?|Aug(?:ust)?|Sep(?:t(?:ember)?)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?"
+    r")"
     r"\s+20\d{2}$",
     re.IGNORECASE,
 )
@@ -39,6 +43,21 @@ _MONTHS_RU = {
     "дек": 12,
 }
 
+_MONTHS_EN = {
+    "jan": 1,
+    "feb": 2,
+    "mar": 3,
+    "apr": 4,
+    "may": 5,
+    "jun": 6,
+    "jul": 7,
+    "aug": 8,
+    "sep": 9,
+    "oct": 10,
+    "nov": 11,
+    "dec": 12,
+}
+
 _AUTHOR_RE = re.compile(r"https?://www\.kallanish\.com/en/authors/", re.IGNORECASE)
 _NOISE_RE = re.compile(
     r"^(News for |<https?://|Disclaim|Copyright|Unsubscribe)",
@@ -56,12 +75,14 @@ class KallanishArticle:
 
 def parse_kallanish_date_line(value: str, *, fallback: date | None = None) -> date | None:
     raw = (value or "").strip()
-    match = _DATE_LINE_RE.match(raw)
-    if not match:
+    if not _DATE_LINE_RE.match(raw):
         return fallback
-    day_s, month_s, year_s = raw.split()
+    parts = raw.split()
+    if len(parts) < 3:
+        return fallback
+    day_s, month_s, year_s = parts[0], parts[1], parts[2]
     month_key = month_s.lower()[:3]
-    month = _MONTHS_RU.get(month_key)
+    month = _MONTHS_RU.get(month_key) or _MONTHS_EN.get(month_key)
     if not month:
         return fallback
     try:
