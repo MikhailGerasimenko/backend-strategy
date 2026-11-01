@@ -85,7 +85,7 @@ cronjob:
       cpu: 0.25
   tolerations:
   - key: "client-cluster"
-    operator: "equal"
+    operator: Equal
     value: "sales-supply"
     effect: "NoSchedule"
 
