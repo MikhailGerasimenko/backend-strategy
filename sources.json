@@ -7,7 +7,7 @@
       "category": "ferrous_domestic",
       "max_pages": 4,
       "enabled": true,
-      "note": "С VPS metalinfo.ru отдаёт заглушку «доступ ограничен». Ночной cron источник пропускает."
+      "note": "ngenix JS-challenge: парсится через Playwright/Chromium (METALINFO_USE_BROWSER=1)."
     },
     {
       "name": "MetalInfo Abroad",
@@ -16,7 +16,7 @@
       "category": "ferrous_abroad",
       "max_pages": 4,
       "enabled": true,
-      "note": "С VPS metalinfo.ru отдаёт заглушку «доступ ограничен». Ночной cron источник пропускает."
+      "note": "ngenix JS-challenge: парсится через Playwright/Chromium (METALINFO_USE_BROWSER=1)."
     },
     {
       "name": "Eurometal",
@@ -148,6 +148,6 @@
   },
   "metalinfo": {
     "use_browser": true,
-    "comment": "ngenix JS-challenge на metalinfo.ru. Нужны: pip install playwright && python3 -m playwright install chromium"
+    "comment": "ngenix JS-challenge. В образе: playwright + chromium. Env: METALINFO_USE_BROWSER=1, PLAYWRIGHT_NO_SANDBOX=1, PARSING_PROXY."
   }
 }

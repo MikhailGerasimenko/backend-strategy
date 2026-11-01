@@ -36,11 +36,12 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel && \
 WORKDIR /app
 
 COPY pyproject.toml poetry.lock README.md ./
-COPY requirements-navigator.txt ./
+COPY requirements-navigator.txt requirements-browser.txt ./
 
 RUN poetry lock --no-interaction && \
     poetry install --no-root --no-interaction --without dev && \
     pip install --no-cache-dir -r requirements-navigator.txt && \
+    pip install --no-cache-dir -r requirements-browser.txt && \
     pip uninstall -y poetry
 
 
@@ -52,13 +53,18 @@ USER root
 RUN update-ca-certificates && \
     (getent group user || groupadd --gid 10000 user) && \
     (getent passwd user || useradd --uid 10000 --gid 10000 --shell /bin/bash --create-home user) && \
-    mkdir -p /app /app/Новости && \
+    mkdir -p /app /app/Новости /ms-playwright && \
     chown -R user:user /app
+
+# Chromium deps for Playwright (MetalInfo ngenix). Proxy нужен и для apt, и для скачивания браузера.
+ENV HTTP_PROXY=http://ar-proxy.severstal.severstalgroup.com:3128 \
+    HTTPS_PROXY=http://ar-proxy.severstal.severstalgroup.com:3128 \
+    NO_PROXY=localhost,127.0.0.1,.severstal.severstalgroup.com,.severstalgroup.com,sso-id-test-int.severstal.com,repo.severstal.severstalgroup.com \
+    PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 RUN rm -f /etc/apt/sources.list.d/debian.sources && \
     apt-get update && \
-    apt-get install -y --no-install-recommends \
-    curl && \
+    apt-get install -y --no-install-recommends curl ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
@@ -66,6 +72,12 @@ WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.13/site-packages /usr/local/lib/python3.13/site-packages
 COPY --from=builder /usr/local/bin/ /usr/local/bin/
 RUN rm -f /usr/local/bin/poetry*
+
+# Системные libs Chromium + сам браузер (нужны для MetalInfo / ngenix).
+RUN playwright install-deps chromium && \
+    playwright install chromium && \
+    chmod -R a+rX /ms-playwright && \
+    rm -rf /var/lib/apt/lists/*
 
 COPY app/ ./app/
 COPY config/ ./config/
@@ -75,16 +87,16 @@ COPY sources.json telegram_channels.json keyword_blocks.json source_brief_catego
 COPY run_news_parsers.py run_web.py generate_brief.py index_news_rag.py ./
 COPY scripts/ ./scripts/
 COPY Новости/.gitkeep ./Новости/
-RUN chmod +x /app/scripts/daily-parse-incontainer.sh
+RUN chmod +x /app/scripts/daily-parse-incontainer.sh && \
+    chown -R user:user /app
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    HTTP_PROXY=http://ar-proxy.severstal.severstalgroup.com:3128 \
-    HTTPS_PROXY=http://ar-proxy.severstal.severstalgroup.com:3128 \
     PARSING_PROXY=http://ar-proxy.severstal.severstalgroup.com:3128 \
-    NO_PROXY=localhost,127.0.0.1,.severstal.severstalgroup.com,.severstalgroup.com,sso-id-test-int.severstal.com \
+    METALINFO_USE_BROWSER=1 \
+    PLAYWRIGHT_NO_SANDBOX=1 \
     TZ=Europe/Moscow
 
 ENV OTEL_METRICS_EXPORTER=none \

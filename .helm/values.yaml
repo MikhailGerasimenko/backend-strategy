@@ -118,6 +118,12 @@ deployment:
       value: "http://ar-proxy.severstal.severstalgroup.com:3128"
     - name: NO_PROXY
       value: "localhost,127.0.0.1,.severstal.severstalgroup.com,.severstalgroup.com,sso-id-test-int.severstal.com"
+    - name: METALINFO_USE_BROWSER
+      value: "1"
+    - name: PLAYWRIGHT_NO_SANDBOX
+      value: "1"
+    - name: PLAYWRIGHT_BROWSERS_PATH
+      value: "/ms-playwright"
     - name: TZ
       value: "Europe/Moscow"
     # RAG: Postgres + pgvector через DATABASE_URL из Vault.
@@ -579,6 +585,12 @@ cronjob:
       value: "http://ar-proxy.severstal.severstalgroup.com:3128"
     - name: NO_PROXY
       value: "localhost,127.0.0.1,.severstal.severstalgroup.com,.severstalgroup.com,sso-id-test-int.severstal.com"
+    - name: METALINFO_USE_BROWSER
+      value: "1"
+    - name: PLAYWRIGHT_NO_SANDBOX
+      value: "1"
+    - name: PLAYWRIGHT_BROWSERS_PATH
+      value: "/ms-playwright"
 
   # -- CronJob resources
   resources:

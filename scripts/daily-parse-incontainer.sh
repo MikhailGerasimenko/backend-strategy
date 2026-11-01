@@ -1,21 +1,19 @@
 #!/bin/sh
-# Ежедневный парсинг внутри контейнера (сервис parser / supercronic).
+# Ежедневный парсинг внутри контейнера (CronJob / supercronic).
 #
 # Расписание: 00:30 Europe/Moscow — парсим ВЧЕРА.
-# MetalInfo пропускается (нет Playwright в образе).
+# MetalInfo — через Playwright/Chromium (ngenix JS-challenge).
 #
 # Ручной прогон:
-#   docker compose run --rm --entrypoint /app/scripts/daily-parse-incontainer.sh \
-#     -e NAV_PARSE_DAY=YYYY-MM-DD parser
-#
-# Логи автозапуска:
-#   docker compose logs -f parser
+#   NAV_PARSE_DAY=YYYY-MM-DD /app/scripts/daily-parse-incontainer.sh
 set -eu
 
 cd /app
 
 export TZ="${NAV_TZ:-Europe/Moscow}"
 export SYNC_NEWS_TO_SERVER=false
+export METALINFO_USE_BROWSER="${METALINFO_USE_BROWSER:-1}"
+export PLAYWRIGHT_NO_SANDBOX="${PLAYWRIGHT_NO_SANDBOX:-1}"
 
 # NAV_PARSE_DAY=YYYY-MM-DD — ручной прогон; иначе вчера по Москве.
 if [ -n "${NAV_PARSE_DAY:-}" ]; then
@@ -44,8 +42,7 @@ if ! python3 run_news_parsers.py \
   --since "$DAY" --until "$DAY" \
   --no-save-db \
   --index-rag \
-  --exclude-source "MetalInfo Domestic" \
-  --exclude-source "MetalInfo Abroad"; then
+  --metalinfo-browser; then
   log "ОШИБКА: парсинг/индексация за $DAY завершились с ошибкой"
   exit 1
 fi

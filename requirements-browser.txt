@@ -1,0 +1,2 @@
+# MetalInfo: ngenix JS-challenge → headless Chromium
+playwright>=1.49,<2
